@@ -1,0 +1,13 @@
+[package]
+name = "erm"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["postgres"]
+postgres = ["sqlx/postgres"]
+mysql = ["sqlx/mysql"]
+sqlite = ["sqlx/sqlite"]
+
+[dependencies]
+sqlx.workspace = true
