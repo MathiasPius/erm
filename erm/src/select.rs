@@ -58,19 +58,14 @@ impl ToSql for Compound {
     fn sql(&self, mut fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
         writeln!(fmt, "select")?;
 
-        let mut first = true;
+        write!(fmt, "{}.entity", self.source.table)?;
         for column in self.source.columns.iter().chain(
             self.joins
                 .iter()
                 .map(|join| join.table.columns.iter())
                 .flatten(),
         ) {
-            if !first {
-                fmt.write_str(",\n")?;
-            } else {
-                first = false;
-            }
-
+            fmt.write_str(",\n")?;
             column.sql(&mut fmt.indent("  "))?;
         }
         fmt.write_str("\n")?;

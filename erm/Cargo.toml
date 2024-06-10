@@ -11,3 +11,7 @@ sqlite = ["sqlx/sqlite"]
 
 [dependencies]
 sqlx.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }

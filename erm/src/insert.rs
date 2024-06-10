@@ -56,20 +56,19 @@ where
     fn sql(&self, fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
         writeln!(fmt, "insert into")?;
         write!(fmt, "  {} (", self.table)?;
-        for (index, value) in self.values.iter().enumerate() {
-            if index != 0 {
-                write!(fmt, ", ")?;
-            }
+
+        write!(fmt, "entity")?;
+        for value in self.values.iter() {
+            write!(fmt, ", ")?;
             write!(fmt, "{}", value)?;
         }
         writeln!(fmt, ")")?;
 
         write!(fmt, "values (")?;
+        Bind::<DB>::new(1).sql(fmt)?;
         for (index, _) in self.values.iter().enumerate() {
-            if index != 0 {
-                write!(fmt, ", ")?;
-            }
-            Bind::<DB>::new(index + 1).sql(fmt)?;
+            write!(fmt, ", ")?;
+            Bind::<DB>::new(index + 2).sql(fmt)?;
         }
         writeln!(fmt, ")")
     }

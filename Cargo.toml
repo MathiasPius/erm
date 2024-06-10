@@ -4,3 +4,4 @@ members = ["erm", "erm-derive"]
 
 [workspace.dependencies]
 sqlx = { version = "*" }
+tokio = { version = "*" }

@@ -5,6 +5,7 @@ pub mod archetype;
 pub mod backend;
 pub mod component;
 mod create;
+pub mod entity;
 mod indent;
 pub mod insert;
 pub mod select;
@@ -20,6 +21,10 @@ impl<'q> OffsetRow<'q>
 where
     usize: ColumnIndex<AnyRow>,
 {
+    pub fn new(row: &'q AnyRow) -> Self {
+        OffsetRow { row, offset: 0 }
+    }
+
     pub fn offset_by(&self, offset: usize) -> OffsetRow {
         OffsetRow {
             row: self.row,
@@ -38,18 +43,27 @@ where
 #[cfg(test)]
 mod tests {
 
-    use sqlx::{any::AnyTypeInfo, database::HasArguments, query::Query, Database, Encode, Type};
+    use std::sync::Arc;
+
+    use sqlx::{
+        any::{AnyRow, AnyTypeInfo},
+        database::HasArguments,
+        query::Query,
+        Database, Encode, SqlitePool, Type,
+    };
 
     use crate::{
         archetype::Archetype,
         backend::{Deserialize, Serialize},
         component::{Component, Field},
         create::Create,
+        entity::GenericEntity,
         insert::Insert,
         select::{Compound, ToSql as _},
         OffsetRow,
     };
 
+    #[derive(Debug)]
     struct Position {
         pub x: f32,
         pub y: f32,
@@ -68,11 +82,11 @@ mod tests {
         }
     }
 
-    impl Deserialize for Position {
-        fn deserialize(row: &OffsetRow) -> Result<Self, sqlx::Error> {
+    impl<'r> Deserialize<'r> for Position {
+        fn deserialize(row: &'r OffsetRow) -> Result<Self, sqlx::Error> {
             Ok(Position {
-                x: row.try_get(0)?,
-                y: row.try_get(1)?,
+                x: row.try_get::<f64>(0)? as f32,
+                y: row.try_get::<f64>(1)? as f32,
             })
         }
     }
@@ -98,6 +112,7 @@ mod tests {
         ];
     }
 
+    #[derive(Debug)]
     struct Velocity {
         pub x: f32,
         pub y: f32,
@@ -116,11 +131,11 @@ mod tests {
         }
     }
 
-    impl Deserialize for Velocity {
+    impl<'r> Deserialize<'r> for Velocity {
         fn deserialize(row: &OffsetRow) -> Result<Self, sqlx::Error> {
             Ok(Velocity {
-                x: row.try_get(0)?,
-                y: row.try_get(1)?,
+                x: row.try_get::<f64>(0)? as f32,
+                y: row.try_get::<f64>(1)? as f32,
             })
         }
     }
@@ -146,6 +161,7 @@ mod tests {
         ];
     }
 
+    #[derive(Debug)]
     struct PhysicsObject {
         pub position: Position,
         pub velocity: Velocity,
@@ -156,7 +172,7 @@ mod tests {
             &[Position::DESCRIPTION, Velocity::DESCRIPTION];
     }
 
-    impl Deserialize for PhysicsObject {
+    impl<'r> Deserialize<'r> for PhysicsObject {
         fn deserialize(row: &OffsetRow) -> Result<Self, sqlx::Error> {
             Ok(PhysicsObject {
                 position: Position::deserialize(&row.offset_by(0))?,
@@ -165,24 +181,75 @@ mod tests {
         }
     }
 
-    #[test]
-    fn dump_sql() {
+    #[tokio::test]
+    async fn dump_sql() {
+        /*
+        let options = SqliteConnectOptions::new()
+            .create_if_missing(true)
+            .filename(":memory:");
+
+        let db = SqlitePool::connect_with(options).await.unwrap();
+         */
+        let db = SqlitePool::connect(":memory:").await.unwrap();
+
+        // create component tables
+        let position = Create::<sqlx::Postgres>::from(&Position::DESCRIPTION)
+            .to_sql()
+            .unwrap();
+
+        println!("-- create position\n{position}\n");
+        sqlx::query(&position).execute(&db).await.unwrap();
+
+        let velocity = Create::<sqlx::Postgres>::from(&Velocity::DESCRIPTION)
+            .to_sql()
+            .unwrap();
+
+        println!("-- create velocity\n{velocity}\n");
+        sqlx::query(&velocity).execute(&db).await.unwrap();
+
+        // Insert components
+        let entity_id = "hello";
+
+        let obj = PhysicsObject {
+            position: Position { x: 1.0, y: 2.0 },
+            velocity: Velocity { x: 3.0, y: 4.0 },
+        };
+
+        let position = Insert::<sqlx::Postgres>::from(&Position::DESCRIPTION)
+            .to_sql()
+            .unwrap();
+
+        println!("-- insert position\n{position}\n");
+        let q = sqlx::query(&position);
+
+        let q = q.bind(entity_id);
+        let q = obj.position.serialize(q);
+        q.execute(&db).await.unwrap();
+
+        let velocity = Insert::<sqlx::Postgres>::from(&Velocity::DESCRIPTION)
+            .to_sql()
+            .unwrap();
+
+        println!("-- insert velocity\n{velocity}\n");
+        let q = sqlx::query(&velocity);
+        let q = q.bind(entity_id);
+        let q = obj.velocity.serialize(q);
+        q.execute(&db).await.unwrap();
+
         let select = Compound::from(&PhysicsObject::as_description())
             .to_sql()
             .unwrap();
 
-        println!("-- select\n{select}\n");
+        println!("-- select physicsobject\n{select}\n");
 
-        let insert = Insert::<sqlx::Postgres>::from(&Position::DESCRIPTION)
-            .to_sql()
-            .unwrap();
+        let result = sqlx::query(&select).fetch_one(&db).await.unwrap();
 
-        println!("-- insert\n{insert}\n");
+        let row = AnyRow::map_from(&result, Arc::default()).unwrap();
 
-        let create = Create::<sqlx::Postgres>::from(&Position::DESCRIPTION)
-            .to_sql()
-            .unwrap();
+        let offset = OffsetRow::new(&row);
+        let entity = GenericEntity::<String>::deserialize(&offset).unwrap();
+        let out = PhysicsObject::deserialize(&offset.offset_by(1)).unwrap();
 
-        println!("-- create\n{create}\n");
+        println!("{entity:?}: {out:#?}");
     }
 }
