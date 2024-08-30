@@ -46,16 +46,7 @@ where
 
 #[cfg(test)]
 mod tests {
-
-    use std::sync::Arc;
-
-    use sqlx::{
-        any::{AnyRow, AnyTypeInfo},
-        query::Query,
-        sqlite::SqliteRow,
-        Database, Sqlite, SqlitePool,
-    };
-    use uuid::Uuid;
+    use sqlx::{any::AnyTypeInfo, query::Query, sqlite::SqliteRow, Database, Sqlite, SqlitePool};
 
     use crate::{
         archetype::Archetype,
@@ -241,7 +232,7 @@ mod tests {
         let row = sqlx::query(&select).fetch_one(&db).await.unwrap();
 
         let offset = OffsetRow::new(&row);
-        let out = PhysicsObject::deserialize(&offset.offset_by(1)).unwrap();
+        let out = PhysicsObject::deserialize(&offset).unwrap();
 
         println!("{out:#?}");
 

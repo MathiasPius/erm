@@ -23,6 +23,10 @@ where
 {
     type DB: Database;
 
+    async fn init<C>(&self)
+    where
+        C: Component + Send;
+
     async fn insert<C>(&self, entity: Entity, component: C)
     where
         C: Component + Send + for<'q> Serialize<'q, Self::DB>;

@@ -27,29 +27,29 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             ];
         }
 
-        #[cfg(feature = "sqlite")]
+        impl ::erm::archetype::Archetype for #component_name {
+            const COMPONENTS: &'static [::erm::component::ComponentDesc] = &[<Self as ::erm::component::Component>::DESCRIPTION];
+        }
+   
+        impl<'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite> for #component_name
         {
-            impl<'query> Serialize<'query, ::sqlx::Sqlite> for #component_name
-            {
-                fn serialize(
-                    &self,
-                    query: Query<'query, ::sqlx::Sqlite, ::sqlx::Sqlite::Arguments<'query>>,
-                ) -> Query<'query, ::sqlx::Sqlite, ::sqlx::Sqlite::Arguments<'query>> {
-                    query #(#serialization_entries)*
-                }
-            }
-
-            impl<'row> ::erm::backend::Deserialize<'row, ::sqlx::SqliteRow> for #component_name
-            {
-                fn deserialize(row: &'row ::erm::OffsetRow<::sqlx::SqliteRow>) -> Result<Self, sqlx::Error> {
-                    Ok(#component_name {
-                        #(#deserialization_entries),*
-                    })
-                }
+            fn serialize(
+                &self,
+                query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
+            ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
+                query #(#serialization_entries)*
             }
         }
-    }
-    .into()
+
+        impl<'row> ::erm::backend::Deserialize<'row, ::sqlx::sqlite::SqliteRow> for #component_name
+        {
+            fn deserialize(row: &'row ::erm::OffsetRow<::sqlx::sqlite::SqliteRow>) -> Result<Self, ::sqlx::Error> {
+                Ok(#component_name {
+                    #(#deserialization_entries),*
+                })
+            }
+        }
+    }.into()
 }
 
 fn into_field_descriptor(field: &Field) -> TokenStream {
@@ -69,7 +69,7 @@ fn into_deserialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> 
     fields
         .enumerate()
         .map(|(index, field)| {
-            let name = field.ident.as_ref().unwrap().to_string();
+            let name = field.ident.as_ref().unwrap();
             let typename = &field.ty;
 
             quote! {
@@ -82,7 +82,7 @@ fn into_deserialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> 
 fn into_serialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
     fields
         .map(|field| {
-            let name = field.ident.as_ref().unwrap().to_string();
+            let name = field.ident.as_ref().unwrap();
             let typename = &field.ty;
 
             quote! {

@@ -1,6 +1,9 @@
+use std::marker::PhantomData;
+
 use super::*;
 use crate::{
     archetype::Archetype,
+    create::Create,
     entity::GenerateUnique,
     insert::Insert,
     select::{Column, Compound, ToSql as _},
@@ -9,24 +12,37 @@ use async_trait::async_trait;
 use futures::StreamExt as _;
 use sqlx::{sqlite::SqliteRow, Sqlite, SqlitePool};
 
-pub struct SqliteBackend {
+pub struct SqliteBackend<Entity> {
     pool: SqlitePool,
+    _entity: PhantomData<Entity>,
 }
 
-impl SqliteBackend {
+impl<Entity> SqliteBackend<Entity> {
     pub fn new(pool: SqlitePool) -> Self {
-        SqliteBackend { pool }
+        SqliteBackend {
+            pool,
+            _entity: PhantomData,
+        }
     }
 }
 
 #[async_trait]
-impl<Entity> Backend<Entity> for SqliteBackend
+impl<Entity> Backend<Entity> for SqliteBackend<Entity>
 where
-    Entity: Send + GenerateUnique,
+    Entity: Send + GenerateUnique + Sync,
     Entity: for<'r> Deserialize<'r, SqliteRow>,
     Entity: for<'q> Serialize<'q, Sqlite>,
 {
     type DB = Sqlite;
+
+    async fn init<C>(&self)
+    where
+        C: Component + Send,
+    {
+        let statement = Create::<Sqlite>::from(&C::DESCRIPTION).to_sql().unwrap();
+
+        sqlx::query(&statement).execute(&self.pool).await.unwrap();
+    }
 
     async fn insert<C>(&self, entity: Entity, component: C)
     where
@@ -77,8 +93,6 @@ where
 
         let sqlite_row = q.fetch_optional(&self.pool).await.unwrap()?;
         let offset = OffsetRow::new(&sqlite_row);
-        let _ = Entity::deserialize(&offset).unwrap();
-        let offset1 = offset.offset_by(1);
-        Some(A::deserialize(&offset1).unwrap())
+        Some(A::deserialize(&offset).unwrap())
     }
 }

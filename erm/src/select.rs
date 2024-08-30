@@ -80,14 +80,22 @@ impl ToSql for Compound {
     fn sql(&self, mut fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
         writeln!(fmt, "select")?;
 
-        write!(fmt, "{}.entity", self.source.table)?;
-        for column in self.source.columns.iter().chain(
-            self.joins
-                .iter()
-                .map(|join| join.table.columns.iter())
-                .flatten(),
-        ) {
-            fmt.write_str(",\n")?;
+        //write!(fmt, "{}.entity", self.source.table)?;
+        for (index, column) in self
+            .source
+            .columns
+            .iter()
+            .chain(
+                self.joins
+                    .iter()
+                    .map(|join| join.table.columns.iter())
+                    .flatten(),
+            )
+            .enumerate()
+        {
+            if index != 0 {
+                fmt.write_str(",\n")?;
+            }
             column.sql(&mut fmt.indent("  "))?;
         }
         fmt.write_str("\n")?;
@@ -119,6 +127,7 @@ where
     Bind<DB>: ToSql,
 {
     fn sql(&self, mut fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.inner.sql(fmt)?;
         writeln!(fmt, "where")?;
         self.column.sql(&mut fmt.indent("  "))?;
         write!(fmt, " == ")?;

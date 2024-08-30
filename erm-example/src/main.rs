@@ -15,9 +15,15 @@ struct Position {
 async fn main() {
     let backend = SqliteBackend::new(SqlitePool::connect(":memory:").await.unwrap());
 
+    backend.init::<Position>().await;
+
     let entity = Uuid::generate_unique();
 
     let position = Position { x: 1.0, y: 2.0 };
 
     backend.insert(entity, position).await;
+
+    let stored_position: Position = backend.get(entity).await.unwrap();
+
+    println!("{stored_position:#?}");
 }
