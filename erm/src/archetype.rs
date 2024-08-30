@@ -1,5 +1,5 @@
 use crate::{
-    component::ComponentDesc,
+    component::{Component, ComponentDesc},
     select::{Column, Compound, Join},
 };
 
@@ -45,16 +45,31 @@ impl From<&ArchetypeDesc> for Compound {
     }
 }
 
-/*
-impl<C1> Archetype for (C1,)
-where
-    C1: Component,
-{
-    const COMPONENTS: &'static [ComponentDesc] = &[ComponentDesc {
-        table_name: <C1 as Component>::TABLE_NAME,
-        fields: <C1 as Component>::FIELDS,
-    }];
-
-    fn from_row(row: OffsetRow) -> Result<Self, sqlx::Error> {}
+macro_rules! impl_archetype_tuple {
+    ($head:ident, $($tail:ident),*) => {
+        impl<$head, $($tail),*> Archetype for ($head, $($tail),*)
+    where
+        $head: Component,
+        $($tail: Component),*
+    {
+        const COMPONENTS: &'static [ComponentDesc] = &[
+            $head::DESCRIPTION,
+            $($tail::DESCRIPTION,)*
+        ];
+    }
+    };
 }
- */
+
+macro_rules! impl_recursive_archetype_tuple {
+    ($head:ident) => {
+        impl_archetype_tuple!($head,);
+    };
+    ($head:ident, $($tail:ident),+) => {
+        impl_archetype_tuple!($head, $($tail),+);
+        impl_recursive_archetype_tuple!($($tail),*);
+    };
+}
+
+impl_recursive_archetype_tuple!(
+    C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16
+);
