@@ -38,4 +38,8 @@ async fn main() {
     let physics_object: PhysicsObject = backend.get(entity).await.unwrap();
 
     println!("{physics_object:#?}");
+
+    for object in backend.list::<PhysicsObject>().await {
+        println!("{object:#?}");
+    }
 }

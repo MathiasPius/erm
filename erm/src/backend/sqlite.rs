@@ -67,9 +67,7 @@ where
             let sqlite_row = row.unwrap();
             //let row = sqlx::any::AnyRow::map_from(&sqlite_row, std::sync::Arc::default()).unwrap();
             let offset = OffsetRow::new(&sqlite_row);
-            let _ = Entity::deserialize(&offset).unwrap();
-            let offset1 = offset.offset_by(1);
-            let out = A::deserialize(&offset1).unwrap();
+            let out = A::deserialize(&offset).unwrap();
             entities.push(out);
         }
 
