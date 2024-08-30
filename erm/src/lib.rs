@@ -1,5 +1,4 @@
 #![feature(const_trait_impl)]
-#![feature(effects)]
 
 pub mod archetype;
 pub mod backend;
@@ -7,38 +6,43 @@ pub mod component;
 mod create;
 pub mod entity;
 mod indent;
-pub mod insert;
-pub mod select;
+mod insert;
+mod select;
+pub mod types;
 
-use sqlx::{any::AnyRow, ColumnIndex, Decode, Row};
+use sqlx::{ColumnIndex, Decode, Row};
 
-pub struct OffsetRow<'q> {
-    pub row: &'q AnyRow,
+pub struct OffsetRow<'q, R> {
+    pub row: &'q R,
     pub offset: usize,
 }
 
-impl<'q> OffsetRow<'q>
-where
-    usize: ColumnIndex<AnyRow>,
-{
-    pub fn new(row: &'q AnyRow) -> Self {
+impl<'q, R> OffsetRow<'q, R> {
+    pub fn new(row: &'q R) -> Self {
         OffsetRow { row, offset: 0 }
     }
 
-    pub fn offset_by(&self, offset: usize) -> OffsetRow {
+    pub fn offset_by(&self, offset: usize) -> Self {
         OffsetRow {
             row: self.row,
             offset: self.offset + offset,
         }
     }
+}
 
+impl<'q, R: Row> OffsetRow<'q, R>
+where
+    usize: ColumnIndex<R>,
+{
     pub fn try_get<'a, T>(&'a self, index: usize) -> Result<T, sqlx::Error>
     where
-        T: Decode<'a, sqlx::Any> + sqlx::Type<sqlx::Any>,
+        T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
     {
         self.row.try_get(index + self.offset)
     }
 }
+
+//pub use component::{Component, Field};
 
 #[cfg(test)]
 mod tests {
@@ -47,17 +51,17 @@ mod tests {
 
     use sqlx::{
         any::{AnyRow, AnyTypeInfo},
-        database::HasArguments,
         query::Query,
-        Database, Encode, SqlitePool, Type,
+        sqlite::SqliteRow,
+        Database, Sqlite, SqlitePool,
     };
+    use uuid::Uuid;
 
     use crate::{
         archetype::Archetype,
         backend::{Deserialize, Serialize},
         component::{Component, Field},
         create::Create,
-        entity::GenericEntity,
         insert::Insert,
         select::{Compound, ToSql as _},
         OffsetRow,
@@ -69,21 +73,17 @@ mod tests {
         pub y: f32,
     }
 
-    impl<'q, DB> Serialize<'q, DB> for Position
-    where
-        f32: Encode<'q, DB> + Type<DB>,
-        DB: Database,
-    {
+    impl<'q> Serialize<'q, Sqlite> for Position {
         fn serialize(
             &self,
-            query: Query<'q, DB, <DB as HasArguments<'q>>::Arguments>,
-        ) -> Query<'q, DB, <DB as HasArguments<'q>>::Arguments> {
+            query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
+        ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
             query.bind(self.x).bind(self.y)
         }
     }
 
-    impl<'r> Deserialize<'r> for Position {
-        fn deserialize(row: &'r OffsetRow) -> Result<Self, sqlx::Error> {
+    impl<'r> Deserialize<'r, SqliteRow> for Position {
+        fn deserialize(row: &'r OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
             Ok(Position {
                 x: row.try_get::<f64>(0)? as f32,
                 y: row.try_get::<f64>(1)? as f32,
@@ -118,21 +118,17 @@ mod tests {
         pub y: f32,
     }
 
-    impl<'q, DB> Serialize<'q, DB> for Velocity
-    where
-        f32: Encode<'q, DB> + Type<DB>,
-        DB: Database,
-    {
+    impl<'q> Serialize<'q, Sqlite> for Velocity {
         fn serialize(
             &self,
-            query: Query<'q, DB, <DB as HasArguments<'q>>::Arguments>,
-        ) -> Query<'q, DB, <DB as HasArguments<'q>>::Arguments> {
+            query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
+        ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
             query.bind(self.x).bind(self.y)
         }
     }
 
-    impl<'r> Deserialize<'r> for Velocity {
-        fn deserialize(row: &OffsetRow) -> Result<Self, sqlx::Error> {
+    impl<'r> Deserialize<'r, SqliteRow> for Velocity {
+        fn deserialize(row: &'r OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
             Ok(Velocity {
                 x: row.try_get::<f64>(0)? as f32,
                 y: row.try_get::<f64>(1)? as f32,
@@ -172,8 +168,8 @@ mod tests {
             &[Position::DESCRIPTION, Velocity::DESCRIPTION];
     }
 
-    impl<'r> Deserialize<'r> for PhysicsObject {
-        fn deserialize(row: &OffsetRow) -> Result<Self, sqlx::Error> {
+    impl<'row> Deserialize<'row, SqliteRow> for PhysicsObject {
+        fn deserialize(row: &'row OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
             Ok(PhysicsObject {
                 position: Position::deserialize(&row.offset_by(0))?,
                 velocity: Velocity::deserialize(&row.offset_by(2))?,
@@ -215,7 +211,7 @@ mod tests {
             velocity: Velocity { x: 3.0, y: 4.0 },
         };
 
-        let position = Insert::<sqlx::Postgres>::from(&Position::DESCRIPTION)
+        let position = Insert::<sqlx::Sqlite>::from(&Position::DESCRIPTION)
             .to_sql()
             .unwrap();
 
@@ -226,7 +222,7 @@ mod tests {
         let q = obj.position.serialize(q);
         q.execute(&db).await.unwrap();
 
-        let velocity = Insert::<sqlx::Postgres>::from(&Velocity::DESCRIPTION)
+        let velocity = Insert::<sqlx::Sqlite>::from(&Velocity::DESCRIPTION)
             .to_sql()
             .unwrap();
 
@@ -242,14 +238,19 @@ mod tests {
 
         println!("-- select physicsobject\n{select}\n");
 
-        let result = sqlx::query(&select).fetch_one(&db).await.unwrap();
-
-        let row = AnyRow::map_from(&result, Arc::default()).unwrap();
+        let row = sqlx::query(&select).fetch_one(&db).await.unwrap();
 
         let offset = OffsetRow::new(&row);
-        let entity = GenericEntity::<String>::deserialize(&offset).unwrap();
         let out = PhysicsObject::deserialize(&offset.offset_by(1)).unwrap();
 
-        println!("{entity:?}: {out:#?}");
+        println!("{out:#?}");
+
+        //let row = AnyRow::map_from(&result, Arc::default()).unwrap();
+
+        //let offset = OffsetRow::new(&row);
+        //let entity = GenericEntity::<String>::deserialize(&offset).unwrap();
+        //let out = PhysicsObject::deserialize(&offset.offset_by(1)).unwrap();
+
+        //println!("{entity:?}: {out:#?}");
     }
 }

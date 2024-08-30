@@ -1,7 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["erm", "erm-derive"]
+members = ["erm", "erm-derive", "erm-example"]
 
 [workspace.dependencies]
 sqlx = { version = "*" }
 tokio = { version = "*" }
+async-trait = { version = "*" }
+futures = { version = "*" }
+erm = { path = "erm" }
+erm-derive = { path = "erm-derive" }
+uuid = { version = "*", features = ["v4"] }

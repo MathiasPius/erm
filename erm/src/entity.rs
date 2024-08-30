@@ -1,31 +1,46 @@
-use sqlx::{any::AnyTypeInfo, Any, Decode, Type};
-
-use crate::{
-    backend::Deserialize,
-    component::{Component, Field},
-};
-
-#[derive(Debug)]
-pub struct GenericEntity<T>(T);
-
-impl<T> Component for GenericEntity<T> {
-    const TABLE_NAME: &'static str = "erm_entities";
-
-    const FIELDS: &'static [crate::component::Field] = &[Field {
-        name: "entity",
-        optional: false,
-        type_info: AnyTypeInfo {
-            kind: sqlx::postgres::any::AnyTypeInfoKind::Blob,
-        },
-    }];
+pub trait GenerateUnique {
+    fn generate_unique() -> Self;
 }
 
-impl<'r, T> Deserialize<'r> for GenericEntity<T>
-where
-    T: Decode<'r, sqlx::Any> + Type<Any>,
-{
-    fn deserialize(row: &'r crate::OffsetRow) -> Result<Self, sqlx::Error> {
-        let inner: T = row.try_get(0)?;
-        Ok(GenericEntity(inner))
+#[cfg(feature = "uuid")]
+mod uuid {
+    use sqlx::{ColumnIndex, Database, Decode, Encode, Row, Type};
+    pub use uuid::Uuid;
+
+    use crate::backend::{Deserialize, Serialize};
+
+    use super::GenerateUnique;
+
+    impl GenerateUnique for Uuid {
+        fn generate_unique() -> Self {
+            Uuid::new_v4()
+        }
+    }
+
+    impl<'q, DB> Serialize<'q, DB> for Uuid
+    where
+        Uuid: Encode<'q, DB> + Type<DB> + Send + Clone + 'q,
+        DB: Database,
+    {
+        fn serialize(
+            &self,
+            query: sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>,
+        ) -> sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>> {
+            query.bind(self.clone())
+        }
+    }
+
+    impl<'r, R: Row> Deserialize<'r, R> for Uuid
+    where
+        Uuid: Decode<'r, <R as Row>::Database> + Type<<R as Row>::Database> + Clone,
+        usize: ColumnIndex<R>,
+    {
+        fn deserialize(row: &'r crate::OffsetRow<R>) -> Result<Self, sqlx::Error> {
+            let id: Uuid = row.try_get(0)?;
+            Ok(id)
+        }
     }
 }
+
+#[cfg(feature = "uuid")]
+pub use uuid::Uuid;

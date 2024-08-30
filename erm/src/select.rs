@@ -1,5 +1,7 @@
-use crate::indent::Indentable as _;
-use std::fmt::Write as _;
+use sqlx::Database;
+
+use crate::{indent::Indentable as _, insert::Bind};
+use std::{fmt::Write as _, marker::PhantomData};
 
 pub trait ToSql {
     fn sql(&self, fmt: &mut dyn std::fmt::Write) -> std::fmt::Result;
@@ -25,6 +27,16 @@ impl ToSql for Column {
 pub struct Select {
     pub table: &'static str,
     pub columns: Vec<Column>,
+}
+
+impl Select {
+    pub fn filter<DB: Database>(self, column: Column) -> Filter<Self, DB> {
+        Filter {
+            inner: self,
+            column,
+            _db: PhantomData,
+        }
+    }
 }
 
 impl ToSql for Select {
@@ -54,6 +66,16 @@ pub struct Compound {
     pub joins: Vec<Join>,
 }
 
+impl Compound {
+    pub fn filter<DB: Database>(self, column: Column) -> Filter<Self, DB> {
+        Filter {
+            inner: self,
+            column,
+            _db: PhantomData,
+        }
+    }
+}
+
 impl ToSql for Compound {
     fn sql(&self, mut fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
         writeln!(fmt, "select")?;
@@ -80,6 +102,28 @@ impl ToSql for Compound {
             write!(fmt, " = ")?;
             join.columns.1.sql(fmt)?;
         }
+        Ok(())
+    }
+}
+
+pub struct Filter<T: ToSql, DB: Database> {
+    pub inner: T,
+    pub column: Column,
+    _db: PhantomData<DB>,
+}
+
+impl<DB, T> ToSql for Filter<T, DB>
+where
+    DB: Database,
+    T: ToSql,
+    Bind<DB>: ToSql,
+{
+    fn sql(&self, mut fmt: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(fmt, "where")?;
+        self.column.sql(&mut fmt.indent("  "))?;
+        write!(fmt, " == ")?;
+        Bind::<DB>::new(1).sql(fmt)?;
+        writeln!(fmt)?;
         Ok(())
     }
 }

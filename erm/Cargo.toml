@@ -4,13 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["postgres"]
+default = ["sqlite", "uuid"]
 postgres = ["sqlx/postgres"]
 mysql = ["sqlx/mysql"]
 sqlite = ["sqlx/sqlite"]
+uuid = ["dep:uuid", "sqlx/uuid"]
 
 [dependencies]
-sqlx.workspace = true
+uuid = { workspace = true, optional = true }
+sqlx = { workspace = true, features = ["postgres"] }
+async-trait = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
