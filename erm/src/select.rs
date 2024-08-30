@@ -102,13 +102,14 @@ impl ToSql for Compound {
 
         writeln!(fmt, "from")?;
         writeln!(fmt.indent("  "), "{}", &self.source.table)?;
-        writeln!(fmt, "")?;
+        writeln!(fmt)?;
         for join in &self.joins {
             writeln!(fmt, "inner join {}", join.table.table,)?;
             write!(fmt.indent("  "), "on ")?;
             join.columns.0.sql(fmt)?;
             write!(fmt, " = ")?;
             join.columns.1.sql(fmt)?;
+            writeln!(fmt)?;
         }
         Ok(())
     }

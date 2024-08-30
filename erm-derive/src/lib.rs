@@ -34,7 +34,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         impl<'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite> for #component_name
         {
             fn serialize(
-                &self,
+                &'query self,
                 query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
             ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
                 query #(#serialization_entries)*
@@ -90,4 +90,83 @@ fn into_serialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> Ve
             }
         })
         .collect::<Vec<_>>()
+}
+
+fn into_component_serialization<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
+    fields
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap();
+
+            quote! {
+                let query = self.#name.serialize(query);
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+
+fn into_component_deserialization<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
+    fields
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap();
+            let typename = &field.ty;
+
+            quote! {
+                #name: {
+                    let value = #typename::deserialize(&row.offset_by(accumulator))?;
+                    accumulator += <#typename as ::erm::component::Component>::FIELDS.len();
+                    value
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+#[proc_macro_derive(Archetype)]
+pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let stream = TokenStream::from(stream);
+    let derive: DeriveInput = syn::parse2(stream).unwrap();
+
+    let Data::Struct(data) = derive.data else {
+        panic!("only structs can act as archetypes");
+    };
+
+    let archetype_name = derive.ident;
+
+    let components = data.fields.iter().map(|field| {
+        let typename = &field.ty;
+        quote!{
+            <#typename as ::erm::component::Component>::DESCRIPTION
+        }
+    });
+
+    let deserialization_entries = into_component_deserialization(data.fields.iter());
+    let serialization_entries = into_component_serialization(data.fields.iter());
+    
+    quote! {
+        impl ::erm::archetype::Archetype for #archetype_name {
+            const COMPONENTS: &'static [::erm::component::ComponentDesc] = &[#(#components,)*];
+        }
+
+        impl<'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite> for #archetype_name
+        {
+            fn serialize(
+                &'query self,
+                query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
+            ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
+                #(#serialization_entries;)*
+                query
+            }
+        }
+
+        impl<'row> ::erm::backend::Deserialize<'row, ::sqlx::sqlite::SqliteRow> for #archetype_name
+        {
+            fn deserialize(row: &'row ::erm::OffsetRow<::sqlx::sqlite::SqliteRow>) -> Result<Self, ::sqlx::Error> {
+                let mut accumulator = 0usize;
+                Ok(#archetype_name {
+                    #(#deserialization_entries),*
+                })
+            }
+        }
+    }.into()
 }
