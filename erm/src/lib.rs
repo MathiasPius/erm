@@ -74,7 +74,7 @@ mod tests {
         fn serialize(
             &self,
             query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-            entity: Entity,
+            entity: &'q Entity,
         ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
             query.bind(entity).bind(self.x).bind(self.y)
         }
@@ -123,7 +123,7 @@ mod tests {
         fn serialize(
             &self,
             query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-            entity: Entity,
+            entity: &'q Entity,
         ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
             query.bind(entity).bind(self.x).bind(self.y)
         }
