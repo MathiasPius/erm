@@ -30,14 +30,15 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         impl ::erm::archetype::Archetype for #component_name {
             const COMPONENTS: &'static [::erm::component::ComponentDesc] = &[<Self as ::erm::component::Component>::DESCRIPTION];
         }
-   
-        impl<'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite> for #component_name
+
+        impl<'query, Entity: ::sqlx::Encode<'query, ::sqlx::Sqlite> + ::sqlx::Type<::sqlx::Sqlite> + 'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite, Entity> for #component_name
         {
             fn serialize(
                 &'query self,
                 query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
+                entity: &'query Entity,
             ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
-                query #(#serialization_entries)*
+                query.bind(entity) #(#serialization_entries)*
             }
         }
 
@@ -98,12 +99,11 @@ fn into_component_serialization<'a>(fields: impl Iterator<Item = &'a Field>) -> 
             let name = field.ident.as_ref().unwrap();
 
             quote! {
-                let query = self.#name.serialize(query);
+                let query = self.#name.serialize(query, entity);
             }
         })
         .collect::<Vec<_>>()
 }
-
 
 fn into_component_deserialization<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
     fields
@@ -135,24 +135,25 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     let components = data.fields.iter().map(|field| {
         let typename = &field.ty;
-        quote!{
+        quote! {
             <#typename as ::erm::component::Component>::DESCRIPTION
         }
     });
 
     let deserialization_entries = into_component_deserialization(data.fields.iter());
     let serialization_entries = into_component_serialization(data.fields.iter());
-    
+
     quote! {
         impl ::erm::archetype::Archetype for #archetype_name {
             const COMPONENTS: &'static [::erm::component::ComponentDesc] = &[#(#components,)*];
         }
 
-        impl<'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite> for #archetype_name
+        impl<'query, Entity: ::sqlx::Encode<'query, ::sqlx::Sqlite> + ::sqlx::Type<::sqlx::Sqlite> + 'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite, Entity> for #archetype_name
         {
             fn serialize(
                 &'query self,
                 query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
+                entity: &'query Entity,
             ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
                 #(#serialization_entries;)*
                 query

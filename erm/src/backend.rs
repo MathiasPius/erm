@@ -3,10 +3,11 @@ use sqlx::{query::Query, Database, Row};
 
 use crate::{archetype::Archetype, component::Component, entity::GenerateUnique, OffsetRow};
 
-pub trait Serialize<'q, DB: Database> {
+pub trait Serialize<'q, DB: Database, Entity> {
     fn serialize(
         &'q self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
+        entity: &'q Entity,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
 }
 
@@ -19,7 +20,6 @@ pub trait Backend<Entity>
 where
     Entity: Send + GenerateUnique,
     Entity: for<'r> Deserialize<'r, <Self::DB as Database>::Row>,
-    Entity: for<'q> Serialize<'q, Self::DB>,
 {
     type DB: Database;
 
@@ -27,9 +27,9 @@ where
     where
         C: Component + Send;
 
-    async fn insert<C>(&self, entity: Entity, component: C)
+    async fn insert<A>(&self, entity: &Entity, components: A)
     where
-        C: Component + Send + for<'q> Serialize<'q, Self::DB>;
+        A: Archetype + Send + for<'q> Serialize<'q, Self::DB, Entity>;
 
     async fn list<A>(&self) -> Vec<A>
     where

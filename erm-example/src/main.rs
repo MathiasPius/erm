@@ -32,8 +32,8 @@ async fn main() {
 
     let entity = Uuid::generate_unique();
 
-    backend.insert(entity, Position { x: 1.0, y: 2.0 }).await;
-    backend.insert(entity, Velocity { x: 8.0, y: 9.0 }).await;
+    backend.insert(&entity, Position { x: 1.0, y: 2.0 }).await;
+    backend.insert(&entity, Velocity { x: 8.0, y: 9.0 }).await;
 
     let physics_object: PhysicsObject = backend.get(entity).await.unwrap();
 

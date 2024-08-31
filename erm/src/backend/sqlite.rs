@@ -10,7 +10,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::StreamExt as _;
-use sqlx::{sqlite::SqliteRow, Sqlite, SqlitePool};
+use sqlx::{prelude::Type, sqlite::SqliteRow, Encode, Sqlite, SqlitePool};
+use std::fmt::Write;
 
 pub struct SqliteBackend<Entity> {
     pool: SqlitePool,
@@ -31,7 +32,7 @@ impl<Entity> Backend<Entity> for SqliteBackend<Entity>
 where
     Entity: Send + GenerateUnique + Sync,
     Entity: for<'r> Deserialize<'r, SqliteRow>,
-    Entity: for<'q> Serialize<'q, Sqlite>,
+    Entity: for<'q> Encode<'q, Sqlite> + Type<Sqlite>,
 {
     type DB = Sqlite;
 
@@ -44,15 +45,24 @@ where
         sqlx::query(&statement).execute(&self.pool).await.unwrap();
     }
 
-    async fn insert<C>(&self, entity: Entity, component: C)
+    async fn insert<A>(&self, entity: &Entity, components: A)
     where
-        C: Component + Send + for<'r> Serialize<'r, Sqlite>,
+        A: Archetype + Send + for<'r> Serialize<'r, Sqlite, Entity>,
     {
-        let insert = Insert::<Sqlite>::from(&C::DESCRIPTION).to_sql().unwrap();
+        let mut sql = "begin transaction;".to_string();
+        for component in <A as Archetype>::COMPONENTS {
+            writeln!(
+                sql,
+                "{};",
+                Insert::<Sqlite>::from(component).to_sql().unwrap()
+            )
+            .unwrap();
+        }
 
-        let q = sqlx::query(&insert);
-        let q = entity.serialize(q);
-        let q = component.serialize(q);
+        writeln!(sql, "commit transaction;").unwrap();
+
+        let q = sqlx::query(&sql);
+        let q = components.serialize(q, entity);
 
         q.execute(&self.pool).await.unwrap();
     }
@@ -65,7 +75,6 @@ where
 
         while let Some(row) = stream.next().await {
             let sqlite_row = row.unwrap();
-            //let row = sqlx::any::AnyRow::map_from(&sqlite_row, std::sync::Arc::default()).unwrap();
             let offset = OffsetRow::new(&sqlite_row);
             let out = A::deserialize(&offset).unwrap();
             entities.push(out);
@@ -87,7 +96,7 @@ where
         let select = select.filter(column).to_sql().unwrap();
 
         let q = sqlx::query(&select);
-        let q = entity.serialize(q);
+        let q = q.bind(entity);
 
         let sqlite_row = q.fetch_optional(&self.pool).await.unwrap()?;
         let offset = OffsetRow::new(&sqlite_row);

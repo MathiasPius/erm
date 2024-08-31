@@ -46,7 +46,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use sqlx::{any::AnyTypeInfo, query::Query, sqlite::SqliteRow, Database, Sqlite, SqlitePool};
+    use sqlx::{
+        any::AnyTypeInfo, query::Query, sqlite::SqliteRow, Database, Encode, Sqlite, SqlitePool,
+        Type,
+    };
 
     use crate::{
         archetype::Archetype,
@@ -64,12 +67,16 @@ mod tests {
         pub y: f32,
     }
 
-    impl<'q> Serialize<'q, Sqlite> for Position {
+    impl<'q, Entity> Serialize<'q, Sqlite, Entity> for Position
+    where
+        Entity: Encode<'q, Sqlite> + Type<Sqlite> + 'q,
+    {
         fn serialize(
             &self,
             query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
+            entity: Entity,
         ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-            query.bind(self.x).bind(self.y)
+            query.bind(entity).bind(self.x).bind(self.y)
         }
     }
 
@@ -109,12 +116,16 @@ mod tests {
         pub y: f32,
     }
 
-    impl<'q> Serialize<'q, Sqlite> for Velocity {
+    impl<'q, Entity> Serialize<'q, Sqlite, Entity> for Velocity
+    where
+        Entity: Encode<'q, Sqlite> + Type<Sqlite> + 'q,
+    {
         fn serialize(
             &self,
             query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
+            entity: Entity,
         ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-            query.bind(self.x).bind(self.y)
+            query.bind(entity).bind(self.x).bind(self.y)
         }
     }
 
@@ -209,8 +220,7 @@ mod tests {
         println!("-- insert position\n{position}\n");
         let q = sqlx::query(&position);
 
-        let q = q.bind(entity_id);
-        let q = obj.position.serialize(q);
+        let q = obj.position.serialize(q, &entity_id);
         q.execute(&db).await.unwrap();
 
         let velocity = Insert::<sqlx::Sqlite>::from(&Velocity::DESCRIPTION)
@@ -219,8 +229,7 @@ mod tests {
 
         println!("-- insert velocity\n{velocity}\n");
         let q = sqlx::query(&velocity);
-        let q = q.bind(entity_id);
-        let q = obj.velocity.serialize(q);
+        let q = obj.velocity.serialize(q, &entity_id);
         q.execute(&db).await.unwrap();
 
         let select = Compound::from(&PhysicsObject::as_description())
