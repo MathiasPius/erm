@@ -15,6 +15,7 @@ uuid = { workspace = true, optional = true }
 sqlx = { workspace = true, features = ["postgres"] }
 async-trait = { workspace = true }
 futures = { workspace = true }
+const_format = "0.2.32"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

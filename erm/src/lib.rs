@@ -1,5 +1,3 @@
-#![feature(const_trait_impl)]
-
 pub mod archetype;
 pub mod backend;
 pub mod component;
@@ -10,7 +8,10 @@ mod insert;
 mod select;
 pub mod types;
 
-use sqlx::{ColumnIndex, Decode, Row};
+mod r#const;
+pub mod cte;
+
+use sqlx::{sqlite::SqliteRow, ColumnIndex, Decode, Row, Sqlite};
 
 pub struct OffsetRow<'q, R> {
     pub row: &'q R,
@@ -22,28 +23,36 @@ impl<'q, R> OffsetRow<'q, R> {
         OffsetRow { row, offset: 0 }
     }
 
-    pub fn offset_by(&self, offset: usize) -> Self {
-        OffsetRow {
-            row: self.row,
-            offset: self.offset + offset,
-        }
+    pub fn skip(&mut self, offset: usize) {
+        self.offset += offset;
     }
 }
 
-impl<'q, R: Row> OffsetRow<'q, R>
-where
-    usize: ColumnIndex<R>,
-{
-    pub fn try_get<'a, T>(&'a self, index: usize) -> Result<T, sqlx::Error>
+// impl<'q, R: Row> OffsetRow<'q, R>
+// where
+//     usize: ColumnIndex<R>,
+// {
+//     pub fn try_get<'a, T>(&'a self, index: usize) -> Result<T, sqlx::Error>
+//     where
+//         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
+//     {
+//         self.row.try_get(index + self.offset)
+//     }
+// }
+
+impl<'q, R: Row> OffsetRow<'q, R> {
+    pub fn try_get<'a, T>(&'a mut self) -> Result<T, sqlx::Error>
     where
         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
+        usize: ColumnIndex<R>,
     {
-        self.row.try_get(index + self.offset)
+        self.offset += 1;
+        self.row.try_get(self.offset - 1)
     }
 }
 
 //pub use component::{Component, Field};
-
+/*
 #[cfg(test)]
 mod tests {
     use sqlx::{
@@ -254,3 +263,4 @@ mod tests {
         //println!("{entity:?}: {out:#?}");
     }
 }
+ */

@@ -2,6 +2,7 @@ pub trait GenerateUnique {
     fn generate_unique() -> Self;
 }
 
+/*
 #[cfg(feature = "uuid")]
 mod uuid {
     use sqlx::{ColumnIndex, Decode, Row, Type};
@@ -23,7 +24,7 @@ mod uuid {
         usize: ColumnIndex<R>,
     {
         fn deserialize(row: &'r crate::OffsetRow<R>) -> Result<Self, sqlx::Error> {
-            let id: Uuid = row.try_get(0)?;
+            let id: Uuid = row.try_get()?;
             Ok(id)
         }
     }
@@ -31,3 +32,4 @@ mod uuid {
 
 #[cfg(feature = "uuid")]
 pub use uuid::Uuid;
+ */
