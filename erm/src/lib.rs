@@ -1,11 +1,13 @@
 #![feature(macro_metavar_expr)]
 
+mod archetype;
 mod component;
 pub mod cte;
-mod offsets;
+mod row;
 
-pub use component::{Archetype, Component, Insert, List};
-pub use offsets::OffsetRow;
+pub use archetype::Archetype;
+pub use component::Component;
+pub use row::OffsetRow;
 
 #[cfg(feature = "derive")]
 pub use erm_derive::*;

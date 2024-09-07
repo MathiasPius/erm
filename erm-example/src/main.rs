@@ -1,5 +1,8 @@
 use erm::{Archetype, Component};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Executor as _,
+};
 
 #[derive(Debug, Component)]
 struct Position {
@@ -31,7 +34,43 @@ async fn main() {
         .await
         .unwrap();
 
-    let result = PhysicsObject::get(&db, 1234).await.unwrap();
+    db.execute(
+        r#"
+            create table if not exists position(
+                entity text primary key,
+                x real,
+                y real
+            );
+            "#,
+    )
+    .await
+    .unwrap();
+
+    db.execute(
+        r#"
+            create table if not exists label(
+                entity text primary key,
+                label text
+            );
+            "#,
+    )
+    .await
+    .unwrap();
+
+    db.execute(
+        r#"
+            insert or ignore into position(entity, x, y) values('a', 10.0, 20.0);
+            insert or ignore into position(entity, x, y) values('b', 30.0, 40.0);
+            insert or ignore into label(entity, label) values("a", "first");
+            insert or ignore into label(entity, label) values("b", "second");
+        "#,
+    )
+    .await
+    .unwrap();
+
+    let result = PhysicsObject::get(&db, &"a").await.unwrap();
+
+    println!("{result:#?}");
 
     /*
     backend.init::<Position>().await;
