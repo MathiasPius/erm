@@ -241,13 +241,13 @@ impl<'q, A: Deserializer<DB> + Unpin + Send + Sync + 'static, DB: Database> List
     pub fn get<'e, E>(
         self,
         db: &'e E,
-    ) -> Pin<Box<dyn Stream<Item = Result<Rowed<A>, sqlx::Error>> + Send + 'e>>
+    ) -> Pin<Box<dyn Stream<Item = Result<A, sqlx::Error>> + Send + 'e>>
     where
         <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
         &'e E: Executor<'e, Database = DB>,
         'q: 'e,
     {
-        self.query.fetch(db)
+        Box::pin(self.query.fetch(db).map(|row| row.map(|result| result.0)))
     }
 }
 
