@@ -181,54 +181,8 @@ impl CommonTableExpression for InnerJoin {
     }
 }
 
-impl CommonTableExpression for OuterJoin {
-    fn traverse(&self, out: &mut Vec<(String, String)>) {
-        self.left.0.traverse(out);
-        self.right.0.traverse(out);
-        out.push((self.name(), self.serialize()));
-    }
-
-    fn columns(&self) -> Vec<(Table, Column)> {
-        self.left
-            .0
-            .columns()
-            .into_iter()
-            .map(|(_, column)| (self.left.0.name(), column))
-            .chain(
-                &mut self
-                    .right
-                    .0
-                    .columns()
-                    .into_iter()
-                    .map(|(_, column)| (self.right.0.name(), column)),
-            )
-            .collect::<Vec<_>>()
-    }
-
-    fn name(&self) -> Table {
-        format!(
-            "cte_{}_{}",
-            self.left.0.primary_table(),
-            self.right.0.primary_table()
-        )
-    }
-
-    fn primary_table(&self) -> Table {
-        self.left.0.name()
-    }
-
-    fn joins(&self) -> Vec<(Table, Column, Column)> {
-        vec![(
-            self.right.0.name(),
-            self.left.1.clone(),
-            self.right.1.clone(),
-        )]
-    }
-}
-
-pub struct OuterJoin {
-    pub left: (Box<dyn CommonTableExpression>, Column),
-    pub right: (Box<dyn CommonTableExpression>, Column),
+pub struct Insert {
+    pub inserts: Vec<(Table, Vec<Column>)>,
 }
 
 #[cfg(test)]

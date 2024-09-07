@@ -6,7 +6,7 @@ use sqlx::{
 };
 
 use crate::{
-    cte::{CommonTableExpression, InnerJoin, Select},
+    cte::{CommonTableExpression, InnerJoin, Insert, Select},
     OffsetRow,
 };
 
@@ -115,37 +115,39 @@ impl<'r, R: Row, T: Deserializer<<R as Row>::Database>> FromRow<'r, R> for Rowed
     }
 }
 
-impl<Entity, T> Serializer<Entity, Sqlite> for T
+impl<Entity, T, DB: Database> Serializer<Entity, DB> for T
 where
-    T: Component<Sqlite>,
-    Entity: for<'q> sqlx::Encode<'q, Sqlite> + sqlx::Type<Sqlite>,
+    T: Component<DB>,
+    Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     fn serialize_components<'q>(
         &'q self,
         entity: &'q Entity,
-        query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-    ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
+        query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
+    ) -> Query<'q, DB, <DB as Database>::Arguments<'q>> {
         let query = query.bind(entity);
-        <Self as Component<Sqlite>>::serialize_fields(self, query)
+        <Self as Component<DB>>::serialize_fields(self, query)
     }
 }
 
-impl<T> Deserializer<Sqlite> for T
+impl<T, DB: Database> Deserializer<DB> for T
 where
-    T: Component<Sqlite>,
+    T: Component<DB>,
 {
     fn cte() -> impl CommonTableExpression {
         Select {
-            table: <T as Component<Sqlite>>::table().to_string(),
-            columns: <T as Component<Sqlite>>::columns()
+            table: <T as Component<DB>>::table().to_string(),
+            columns: <T as Component<DB>>::columns()
                 .into_iter()
                 .map(|column| column.to_string())
                 .collect(),
         }
     }
 
-    fn deserialize_components(row: &mut OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
-        <Self as Component<Sqlite>>::deserialize_fields(row)
+    fn deserialize_components(
+        row: &mut OffsetRow<<DB as Database>::Row>,
+    ) -> Result<Self, sqlx::Error> {
+        <Self as Component<DB>>::deserialize_fields(row)
     }
 }
 
