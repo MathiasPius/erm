@@ -6,7 +6,7 @@ use sqlx::{
 };
 
 use crate::{
-    cte::{CommonTableExpression, InnerJoin, Insert, Select},
+    cte::{CommonTableExpression, InnerJoin, Select},
     OffsetRow,
 };
 
@@ -88,6 +88,8 @@ pub trait Serializer<Entity, DB: Database>: Sized
 where
     Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
+    fn insert_statement() -> String;
+
     fn serialize_components<'q>(
         &'q self,
         entity: &'q Entity,
@@ -120,6 +122,21 @@ where
     T: Component<DB>,
     Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
+    fn insert_statement() -> String {
+        let table = <T as Component<DB>>::table();
+        let columns = <T as Component<DB>>::columns();
+
+        format!(
+            "insert into {}(entity, {}) values(?, {})",
+            table,
+            columns.join(", "),
+            std::iter::repeat("?")
+                .take(columns.len())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
     fn serialize_components<'q>(
         &'q self,
         entity: &'q Entity,
@@ -155,6 +172,14 @@ impl<Entity> Serializer<Entity, Sqlite> for Person
 where
     Entity: for<'q> sqlx::Encode<'q, Sqlite> + sqlx::Type<Sqlite> + 'static,
 {
+    fn insert_statement() -> String {
+        vec![
+            <Position as Serializer<Entity, Sqlite>>::insert_statement(),
+            <RealName as Serializer<Entity, Sqlite>>::insert_statement(),
+        ]
+        .join(";\n")
+    }
+
     fn serialize_components<'q>(
         &'q self,
         entity: &'q Entity,
@@ -188,6 +213,14 @@ where
     B: Serializer<Entity, Sqlite>,
     Entity: for<'q> sqlx::Encode<'q, Sqlite> + sqlx::Type<Sqlite> + 'static,
 {
+    fn insert_statement() -> String {
+        vec![
+            <A as Serializer<Entity, Sqlite>>::insert_statement(),
+            <B as Serializer<Entity, Sqlite>>::insert_statement(),
+        ]
+        .join(";\n")
+    }
+
     fn serialize_components<'q>(
         &'q self,
         entity: &'q Entity,
@@ -237,10 +270,10 @@ pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync
         &'e E: Executor<'e, Database = DB>,
         'q: 'e,
     {
-        let cte = <Self as Deserializer<DB>>::cte();
-
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
+            let cte = <Self as Deserializer<DB>>::cte();
+
             format!(
                 "{}\nselect {} from {}",
                 cte.finalize(),
@@ -279,10 +312,10 @@ pub trait Get<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync 
         &'e E: Executor<'e, Database = DB>,
         'q: 'e,
     {
-        let cte = <Self as Deserializer<DB>>::cte();
-
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
+            let cte = <Self as Deserializer<DB>>::cte();
+
             format!(
                 "{}\nselect {} from {} where entity = ?",
                 cte.finalize(),
@@ -312,20 +345,64 @@ where
 {
 }
 
+pub trait Insert<Entity, DB: Database>:
+    Serializer<Entity, DB> + Sized + Unpin + Send + Sync + 'static
+where
+    Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+{
+    async fn insert<'q, 'e, E>(
+        &'q self,
+        executor: &'e E,
+        entity: &'q Entity,
+    ) -> Result<<DB as Database>::QueryResult, sqlx::Error>
+    where
+        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
+        &'e E: Executor<'e, Database = DB>,
+        'q: 'e,
+    {
+        static SQL: OnceLock<String> = OnceLock::new();
+
+        let sql = SQL.get_or_init(|| <Self as Serializer<Entity, DB>>::insert_statement());
+
+        let query = sqlx::query(sql);
+        let query = self.serialize_components(&entity, query);
+
+        executor.execute(query).await
+    }
+}
+
+impl<Entity, DB, T> Insert<Entity, DB> for T
+where
+    DB: Database,
+    T: Serializer<Entity, DB> + Sized + Unpin + Send + Sync + 'static,
+    Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use futures::StreamExt as _;
-    use sqlx::{sqlite::SqliteConnectOptions, Executor as _, SqlitePool};
+    use sqlx::{
+        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+        Executor as _, Sqlite,
+    };
 
-    use crate::r#const::{Get as _, List as _, Person};
+    use crate::r#const::{
+        Get as _, Insert as _, List as _, Person, Position, RealName, Serializer,
+    };
 
     #[tokio::test]
     async fn test_func() {
-        let options = SqliteConnectOptions::new()
-            .create_if_missing(true)
-            .filename("test.sqlite3");
+        let options = SqliteConnectOptions::new().in_memory(true);
 
-        let db = SqlitePool::connect_with(options).await.unwrap();
+        let db = SqlitePoolOptions::new()
+            .min_connections(1)
+            .max_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(options)
+            .await
+            .unwrap();
 
         db.execute(
             r#"
@@ -376,5 +453,26 @@ mod tests {
         //     let person = Person::deserialize_components(&mut offset).unwrap();
         //     println!("{person:#?}");
         // }
+
+        let c = Person {
+            position: Position { x: 111.0, y: 222.0 },
+            name: RealName {
+                real_name: "third".to_string(),
+            },
+        };
+
+        c.insert(&db, &"c".to_string()).await.unwrap();
+
+        let mut results = Person::list(&db);
+
+        while let Some(Ok(result)) = results.next().await {
+            println!("NEW LINES:\n{:?}", result);
+        }
+    }
+
+    #[test]
+    fn inserts() {
+        let insert = <Person as Serializer<String, Sqlite>>::insert_statement();
+        println!("{insert}");
     }
 }
