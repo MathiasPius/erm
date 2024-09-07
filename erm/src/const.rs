@@ -1,8 +1,14 @@
-use std::sync::OnceLock;
+use std::{marker::PhantomData, pin::Pin, sync::OnceLock};
 
-use sqlx::{query::Query, sqlite::SqliteRow, Database, Sqlite};
+use futures::{Stream, StreamExt};
+use sqlx::{
+    query::{Query, QueryAs},
+    sqlite::SqliteRow,
+    Database, Executor, FromRow, IntoArguments, Row, Sqlite,
+};
 
 use crate::{
+    archetype::Archetype,
     cte::{CommonTableExpression, InnerJoin, Select},
     OffsetRow,
 };
@@ -98,6 +104,18 @@ pub trait Deserializer<DB: Database>: Sized {
     fn deserialize_components(
         row: &mut OffsetRow<<DB as Database>::Row>,
     ) -> Result<Self, sqlx::Error>;
+}
+
+#[derive(Debug)]
+pub struct Rowed<T>(pub T);
+
+impl<'r, R: Row, T: Deserializer<<R as Row>::Database>> FromRow<'r, R> for Rowed<T> {
+    fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
+        let mut row = OffsetRow::new(row);
+        Ok(Rowed(
+            <T as Deserializer<<R as Row>::Database>>::deserialize_components(&mut row).unwrap(),
+        ))
+    }
 }
 
 impl<Entity, T> Serializer<Entity, Sqlite> for T
@@ -211,12 +229,30 @@ where
     }
 }
 
-pub trait Fetch<'q, DB: Database> {
-    fn list() -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
+pub trait Fetch<'q, DB: Database>: Deserializer<DB> + Sized + Send + Sync {
+    fn list() -> List<'q, Self, DB>;
 }
 
-impl<'q, DB: Database, T: Deserializer<DB>> Fetch<'q, DB> for T {
-    fn list() -> Query<'q, DB, <DB as Database>::Arguments<'q>> {
+pub struct List<'q, A: Deserializer<DB> + Send + Sync, DB: Database> {
+    query: QueryAs<'q, DB, Rowed<A>, <DB as Database>::Arguments<'q>>,
+}
+
+impl<'q, A: Deserializer<DB> + Unpin + Send + Sync + 'static, DB: Database> List<'q, A, DB> {
+    pub fn get<'e, E>(
+        self,
+        db: &'e E,
+    ) -> Pin<Box<dyn Stream<Item = Result<Rowed<A>, sqlx::Error>> + Send + 'e>>
+    where
+        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
+        &'e E: Executor<'e, Database = DB>,
+        'q: 'e,
+    {
+        self.query.fetch(db)
+    }
+}
+
+impl<'q, DB: Database, T: Deserializer<DB> + Send + Sync> Fetch<'q, DB> for T {
+    fn list() -> List<'q, Self, DB> {
         let cte = <T as Deserializer<DB>>::cte();
 
         static SQL: OnceLock<String> = OnceLock::new();
@@ -235,12 +271,15 @@ impl<'q, DB: Database, T: Deserializer<DB>> Fetch<'q, DB> for T {
 
         println!("{sql}");
 
-        sqlx::query(&sql)
+        List {
+            query: sqlx::query_as(&sql),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use futures::StreamExt;
     use sqlx::{sqlite::SqliteConnectOptions, Executor as _, SqlitePool};
 
     use crate::{
@@ -292,10 +331,16 @@ mod tests {
 
         let query = Person::list();
 
-        for result in db.fetch_all(query).await.unwrap() {
-            let mut offset = OffsetRow::new(&result);
-            let person = Person::deserialize_components(&mut offset).unwrap();
-            println!("{person:#?}");
+        let mut results = query.get(&db);
+
+        while let Some(result) = results.next().await {
+            println!("{:#?}", result);
         }
+
+        // for result in db.fetch_all(query).await.unwrap() {
+        //     let mut offset = OffsetRow::new(&result);
+        //     let person = Person::deserialize_components(&mut offset).unwrap();
+        //     println!("{person:#?}");
+        // }
     }
 }

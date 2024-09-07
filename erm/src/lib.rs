@@ -11,15 +11,15 @@ pub mod types;
 mod r#const;
 pub mod cte;
 
-use sqlx::{sqlite::SqliteRow, ColumnIndex, Decode, Row, Sqlite};
+use sqlx::{ColumnIndex, Decode, Row};
 
-pub struct OffsetRow<'q, R> {
-    pub row: &'q R,
+pub struct OffsetRow<'r, R: Row> {
+    pub row: &'r R,
     pub offset: usize,
 }
 
-impl<'q, R> OffsetRow<'q, R> {
-    pub fn new(row: &'q R) -> Self {
+impl<'r, R: Row> OffsetRow<'r, R> {
+    pub fn new(row: &'r R) -> Self {
         OffsetRow { row, offset: 0 }
     }
 
@@ -40,7 +40,7 @@ impl<'q, R> OffsetRow<'q, R> {
 //     }
 // }
 
-impl<'q, R: Row> OffsetRow<'q, R> {
+impl<'r, R: Row> OffsetRow<'r, R> {
     pub fn try_get<'a, T>(&'a mut self) -> Result<T, sqlx::Error>
     where
         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
