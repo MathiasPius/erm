@@ -6,6 +6,5 @@ edition = "2021"
 [dependencies]
 uuid = { workspace = true }
 erm = { workspace = true, features = ["sqlite", "uuid"] }
-erm-derive = { workspace = true, features = ["sqlite"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }

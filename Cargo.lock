@@ -273,6 +273,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "const_format",
+ "erm-derive",
  "futures",
  "sqlx",
  "tokio",
@@ -293,7 +294,6 @@ name = "erm-example"
 version = "0.1.0"
 dependencies = [
  "erm",
- "erm-derive",
  "sqlx",
  "tokio",
  "uuid",

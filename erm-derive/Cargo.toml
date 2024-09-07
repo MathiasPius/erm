@@ -11,6 +11,7 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2.0.66"
 
-
 [features]
 sqlite = []
+postgres = []
+mysql = []

@@ -1,9 +1,8 @@
-use erm::{
-    backend::{sqlite::SqliteBackend, Backend},
-    entity::{GenerateUnique, Uuid},
+use erm::{Archetype, Component};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    SqlitePool,
 };
-use erm_derive::{Archetype, Component};
-use sqlx::SqlitePool;
 
 #[derive(Debug, Component)]
 struct Position {
@@ -17,16 +16,28 @@ struct Velocity {
     y: f32,
 }
 
+/*
 #[derive(Debug, Archetype)]
 struct PhysicsObject {
     pub position: Position,
     pub velocity: Velocity,
 }
+     */
 
 #[tokio::main]
 async fn main() {
-    let backend = SqliteBackend::new(SqlitePool::connect(":memory:").await.unwrap());
+    let options = SqliteConnectOptions::new().in_memory(true);
 
+    let db = SqlitePoolOptions::new()
+        .min_connections(1)
+        .max_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect_with(options)
+        .await
+        .unwrap();
+
+    /*
     backend.init::<Position>().await;
     backend.init::<Velocity>().await;
 
@@ -42,4 +53,5 @@ async fn main() {
     for object in backend.list::<PhysicsObject>().await {
         println!("{object:#?}");
     }
+     */
 }

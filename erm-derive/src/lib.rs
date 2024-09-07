@@ -1,6 +1,6 @@
-use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{Data, DeriveInput, Field};
+use proc_macro2::{Ident, TokenStream};
+use quote::{quote, TokenStreamExt};
+use syn::{Data, DeriveInput};
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -12,87 +12,98 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     };
 
     let component_name = derive.ident;
-    let table_name = component_name.to_string().to_lowercase();
+    let table = component_name.to_string().to_lowercase();
 
-    let field_descriptors = data.fields.iter().map(into_field_descriptor);
-    let deserialization_entries = into_deserialization_entries(data.fields.iter());
-    let serialization_entries = into_serialization_entries(data.fields.iter());
+    let columns: Vec<_> = data
+        .fields
+        .iter()
+        .map(|field| field.ident.as_ref().unwrap().to_string())
+        .collect();
 
-    quote! {
-        impl ::erm::component::Component for #component_name {
-            const TABLE_NAME: &'static str = #table_name;
-
-            const FIELDS: &'static [::erm::component::Field] = &[
-                #(#field_descriptors)*
-            ];
-        }
-
-        impl ::erm::archetype::Archetype for #component_name {
-            const COMPONENTS: &'static [::erm::component::ComponentDesc] = &[<Self as ::erm::component::Component>::DESCRIPTION];
-        }
-
-        impl<'query, Entity: ::sqlx::Encode<'query, ::sqlx::Sqlite> + ::sqlx::Type<::sqlx::Sqlite> + 'query> ::erm::backend::Serialize<'query, ::sqlx::Sqlite, Entity> for #component_name
-        {
-            fn serialize(
-                &'query self,
-                query: ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>>,
-                entity: &'query Entity,
-            ) -> ::sqlx::query::Query<'query, ::sqlx::Sqlite, <::sqlx::Sqlite as ::sqlx::Database>::Arguments<'query>> {
-                query.bind(entity) #(#serialization_entries)*
-            }
-        }
-
-        impl<'row> ::erm::backend::Deserialize<'row, ::sqlx::sqlite::SqliteRow> for #component_name
-        {
-            fn deserialize(row: &'row ::erm::OffsetRow<::sqlx::sqlite::SqliteRow>) -> Result<Self, ::sqlx::Error> {
-                Ok(#component_name {
-                    #(#deserialization_entries),*
-                })
-            }
-        }
-    }.into()
-}
-
-fn into_field_descriptor(field: &Field) -> TokenStream {
-    let name = field.ident.as_ref().unwrap().to_string();
-    let typename = &field.ty;
-
-    quote! {
-        ::erm::component::Field {
-            name: #name,
-            optional: false,
-            type_info: <#typename as ::erm::types::ColumnType>::SQL_TYPE,
-        },
-    }
-}
-
-fn into_deserialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
-    fields
-        .enumerate()
-        .map(|(index, field)| {
-            let name = field.ident.as_ref().unwrap();
-            let typename = &field.ty;
-
-            quote! {
-                #name: row.try_get::<#typename>(#index)?
-            }
-        })
-        .collect::<Vec<_>>()
-}
-
-fn into_serialization_entries<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
-    fields
+    let unpack: Vec<_> = data
+        .fields
+        .iter()
         .map(|field| {
             let name = field.ident.as_ref().unwrap();
             let typename = &field.ty;
 
             quote! {
-                .bind(self.#name as #typename)
+                let #name = row.try_get::<#typename>();
             }
         })
-        .collect::<Vec<_>>()
+        .collect();
+
+    let repack: Vec<_> = data
+        .fields
+        .iter()
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap();
+
+            quote! {
+                #name: #name?
+            }
+        })
+        .collect();
+
+    let binds: Vec<_> = data
+        .fields
+        .iter()
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap();
+
+            quote! {
+                .bind(self.#name)
+            }
+        })
+        .collect();
+
+    let implementation = |database: Ident| {
+        quote! {
+            impl ::erm::Component<::sqlx::#database> for #component_name {
+                fn table() -> &'static str {
+                    #table
+                }
+
+                fn columns() -> &'static [&'static str] {
+                    &[#(#columns,)*]
+                }
+
+                fn deserialize_fields(row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {
+                    #(#unpack;)*
+
+                    Ok(#component_name {
+                        #(#repack,)*
+                    })
+                }
+
+                fn serialize_fields<'q>(
+                    &'q self,
+                    query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
+                ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
+                    query #(#binds)*
+                }
+
+            }
+        }
+    };
+
+    let mut implementations = TokenStream::new();
+    #[cfg(feature = "sqlite")]
+    implementations.append_all(implementation(Ident::new("Sqlite", data.struct_token.span)));
+
+    #[cfg(feature = "postgres")]
+    implementations.append_all(implementation(Ident::new(
+        "Postgres",
+        data.struct_token.span,
+    )));
+
+    #[cfg(feature = "mysql")]
+    implementations.append_all(implementation(Ident::new("MySql", data.struct_token.span)));
+
+    implementations.into()
 }
 
+/*
 fn into_component_serialization<'a>(fields: impl Iterator<Item = &'a Field>) -> Vec<TokenStream> {
     fields
         .map(|field| {
@@ -171,3 +182,4 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         }
     }.into()
 }
+ */
