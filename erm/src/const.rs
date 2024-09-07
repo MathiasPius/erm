@@ -2,9 +2,7 @@ use std::{pin::Pin, sync::OnceLock};
 
 use futures::{Stream, StreamExt};
 use sqlx::{
-    query::{Query, QueryAs},
-    sqlite::SqliteRow,
-    Database, Executor, FromRow, IntoArguments, Row, Sqlite,
+    query::Query, sqlite::SqliteRow, Database, Executor, FromRow, IntoArguments, Row, Sqlite,
 };
 
 use crate::{
@@ -228,31 +226,16 @@ where
     }
 }
 
-pub trait Fetch<'q, DB: Database>: Deserializer<DB> + Sized + Send + Sync {
-    fn list() -> List<'q, Self, DB>;
-}
-
-pub struct List<'q, A: Deserializer<DB> + Send + Sync, DB: Database> {
-    query: QueryAs<'q, DB, Rowed<A>, <DB as Database>::Arguments<'q>>,
-}
-
-impl<'q, A: Deserializer<DB> + Unpin + Send + Sync + 'static, DB: Database> List<'q, A, DB> {
-    pub fn get<'e, E>(
-        self,
-        db: &'e E,
-    ) -> Pin<Box<dyn Stream<Item = Result<A, sqlx::Error>> + Send + 'e>>
+pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static {
+    fn list<'e, E>(
+        executor: &'e E,
+    ) -> Pin<Box<dyn Stream<Item = Result<Self, sqlx::Error>> + Send + 'e>>
     where
         <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
         &'e E: Executor<'e, Database = DB>,
         'q: 'e,
     {
-        Box::pin(self.query.fetch(db).map(|row| row.map(|result| result.0)))
-    }
-}
-
-impl<'q, DB: Database, T: Deserializer<DB> + Send + Sync> Fetch<'q, DB> for T {
-    fn list() -> List<'q, Self, DB> {
-        let cte = <T as Deserializer<DB>>::cte();
+        let cte = <Self as Deserializer<DB>>::cte();
 
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
@@ -269,22 +252,70 @@ impl<'q, DB: Database, T: Deserializer<DB> + Send + Sync> Fetch<'q, DB> for T {
         });
 
         println!("{sql}");
+        let query = sqlx::query_as(&sql);
 
-        List {
-            query: sqlx::query_as(&sql),
-        }
+        Box::pin(
+            query
+                .fetch(executor)
+                .map(|row| row.map(|result: Rowed<Self>| result.0)),
+        )
     }
+}
+
+impl<'q, DB, T> List<'q, DB> for T
+where
+    DB: Database,
+    T: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static,
+{
+}
+
+pub trait Get<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static {
+    async fn get<'e, E, Entity>(executor: &'e E, entity: Entity) -> Result<Self, sqlx::Error>
+    where
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + 'q,
+        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
+        &'e E: Executor<'e, Database = DB>,
+        'q: 'e,
+    {
+        let cte = <Self as Deserializer<DB>>::cte();
+
+        static SQL: OnceLock<String> = OnceLock::new();
+        let sql = SQL.get_or_init(|| {
+            format!(
+                "{}\nselect {} from {} where entity = ?",
+                cte.finalize(),
+                cte.columns()
+                    .iter()
+                    .map(|(_, column)| format!("{}.{column}", cte.name()))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                cte.name()
+            )
+        });
+
+        println!("{sql}");
+        let result: Rowed<Self> = sqlx::query_as(&sql)
+            .bind(entity)
+            .fetch_one(executor)
+            .await?;
+
+        Ok(result.0)
+    }
+}
+
+impl<'q, DB, T> Get<'q, DB> for T
+where
+    DB: Database,
+    T: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static,
+{
 }
 
 #[cfg(test)]
 mod tests {
-    use futures::StreamExt;
+    use futures::StreamExt as _;
     use sqlx::{sqlite::SqliteConnectOptions, Executor as _, SqlitePool};
 
-    use crate::{
-        r#const::{Deserializer as _, Fetch as _, Person},
-        OffsetRow,
-    };
+    use crate::r#const::{Get as _, List as _, Person};
 
     #[tokio::test]
     async fn test_func() {
@@ -328,13 +359,15 @@ mod tests {
         .await
         .unwrap();
 
-        let query = Person::list();
+        let mut results = Person::list(&db);
 
-        let mut results = query.get(&db);
-
-        while let Some(result) = results.next().await {
+        while let Some(Ok(result)) = results.next().await {
             println!("{:#?}", result);
         }
+
+        let a = Person::get(&db, &"a").await.unwrap();
+
+        println!("{a:?}");
 
         // for result in db.fetch_all(query).await.unwrap() {
         //     let mut offset = OffsetRow::new(&result);
