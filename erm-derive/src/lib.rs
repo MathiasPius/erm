@@ -14,58 +14,52 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let component_name = derive.ident;
     let table = component_name.to_string().to_lowercase();
 
-    let columns: Vec<_> = data
-        .fields
-        .iter()
-        .map(|field| field.ident.as_ref().unwrap().to_string())
-        .collect();
+    let implementation = |database: Ident| {
+        let columns = data.fields.iter().map(|field| {
+            let name = field.ident.as_ref().unwrap().to_string();
+            let typename = &field.ty;
 
-    let unpack: Vec<_> = data
-        .fields
-        .iter()
-        .map(|field| {
+            quote! {
+                ::erm::ColumnDefinition::<::sqlx::#database> {
+                    name: #name,
+                    type_info: <#typename as ::sqlx::Type<::sqlx::#database>>::type_info(),
+                }
+            }
+        });
+
+        let unpack = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap();
             let typename = &field.ty;
 
             quote! {
                 let #name = row.try_get::<#typename>();
             }
-        })
-        .collect();
+        });
 
-    let repack: Vec<_> = data
-        .fields
-        .iter()
-        .map(|field| {
+        let repack = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap();
 
             quote! {
                 #name: #name?
             }
-        })
-        .collect();
+        });
 
-    let binds: Vec<_> = data
-        .fields
-        .iter()
-        .map(|field| {
+        let binds = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap();
 
             quote! {
                 .bind(&self.#name)
             }
-        })
-        .collect();
+        });
 
-    let implementation = |database: Ident| {
         quote! {
             impl ::erm::Component<::sqlx::#database> for #component_name {
                 fn table() -> &'static str {
                     #table
                 }
 
-                fn columns() -> &'static [&'static str] {
-                    &[#(#columns,)*]
+                fn columns() -> Vec<::erm::ColumnDefinition::<::sqlx::#database>> {
+                    vec![#(#columns,)*]
                 }
 
                 fn deserialize_fields(row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {

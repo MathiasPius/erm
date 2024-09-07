@@ -6,7 +6,7 @@ pub mod cte;
 mod row;
 
 pub use archetype::Archetype;
-pub use component::Component;
+pub use component::{ColumnDefinition, Component};
 pub use row::OffsetRow;
 
 #[cfg(feature = "derive")]

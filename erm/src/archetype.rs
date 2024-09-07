@@ -50,7 +50,6 @@ pub trait Archetype<DB: Database>: Sized {
                 )
             });
 
-            println!("{sql}");
             let result: Rowed<Self> = sqlx::query_as(&sql)
                 .bind(entity)
                 .fetch_one(executor)
@@ -82,7 +81,6 @@ pub trait Archetype<DB: Database>: Sized {
             )
         });
 
-        println!("{sql}");
         let query = sqlx::query_as(&sql);
 
         Box::pin(
@@ -120,7 +118,10 @@ where
 {
     fn insert_statement() -> String {
         let table = <T as Component<DB>>::table();
-        let columns = <T as Component<DB>>::columns();
+        let columns: Vec<_> = <T as Component<DB>>::columns()
+            .into_iter()
+            .map(|def| def.name())
+            .collect();
 
         format!(
             "insert into {}(entity, {}) values(?1, {})",
@@ -145,7 +146,7 @@ where
             table: <T as Component<DB>>::table().to_string(),
             columns: <T as Component<DB>>::columns()
                 .into_iter()
-                .map(|column| column.to_string())
+                .map(|column| column.name().to_string())
                 .collect(),
         }
     }
@@ -213,6 +214,10 @@ macro_rules! impl_compound {
     ($($list:ident),*) => {
         #[cfg(feature = "sqlite")]
         impl_compound_for_db!(sqlx::Sqlite, $($list),*);
+        #[cfg(feature = "postgres")]
+        impl_compound_for_db!(sqlx::Postgres, $($list),*);
+        #[cfg(feature = "mysql")]
+        impl_compound_for_db!(sqlx::MySql, $($list),*);
     };
 }
 

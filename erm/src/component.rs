@@ -2,10 +2,25 @@ use sqlx::{query::Query, Database};
 
 use crate::OffsetRow;
 
+pub struct ColumnDefinition<DB: Database> {
+    pub name: &'static str,
+    pub type_info: <DB as Database>::TypeInfo,
+}
+
+impl<DB: Database> ColumnDefinition<DB> {
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn type_info(&self) -> &<DB as Database>::TypeInfo {
+        &self.type_info
+    }
+}
+
 /// Describes reading and writing from a Component-specific Table.
 pub trait Component<DB: Database>: Sized {
     fn table() -> &'static str;
-    fn columns() -> &'static [&'static str];
+    fn columns() -> Vec<ColumnDefinition<DB>>;
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
     fn serialize_fields<'q>(
         &'q self,

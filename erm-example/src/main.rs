@@ -70,23 +70,14 @@ async fn main() {
 
     let result = PhysicsObject::get(&db, &"a").await.unwrap();
 
+    let third = PhysicsObject {
+        position: Position { x: 111.0, y: 222.0 },
+        label: Label {
+            label: "Something goes here?".to_string(),
+        },
+    };
+
+    third.insert(&db, &"c").await.unwrap();
+
     println!("{result:#?}");
-
-    /*
-    backend.init::<Position>().await;
-    backend.init::<Velocity>().await;
-
-    let entity = Uuid::generate_unique();
-
-    backend.insert(&entity, Position { x: 1.0, y: 2.0 }).await;
-    backend.insert(&entity, Velocity { x: 8.0, y: 9.0 }).await;
-
-    let physics_object: PhysicsObject = backend.get(entity).await.unwrap();
-
-    println!("{physics_object:#?}");
-
-    for object in backend.list::<PhysicsObject>().await {
-        println!("{object:#?}");
-    }
-     */
 }
