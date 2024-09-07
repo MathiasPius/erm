@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, pin::Pin, sync::OnceLock};
+use std::{pin::Pin, sync::OnceLock};
 
 use futures::{Stream, StreamExt};
 use sqlx::{
@@ -8,7 +8,6 @@ use sqlx::{
 };
 
 use crate::{
-    archetype::Archetype,
     cte::{CommonTableExpression, InnerJoin, Select},
     OffsetRow,
 };
@@ -107,7 +106,7 @@ pub trait Deserializer<DB: Database>: Sized {
 }
 
 #[derive(Debug)]
-pub struct Rowed<T>(pub T);
+struct Rowed<T>(pub T);
 
 impl<'r, R: Row, T: Deserializer<<R as Row>::Database>> FromRow<'r, R> for Rowed<T> {
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
