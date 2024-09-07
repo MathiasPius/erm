@@ -181,10 +181,6 @@ impl CommonTableExpression for InnerJoin {
     }
 }
 
-pub struct Insert {
-    pub inserts: Vec<(Table, Vec<Column>)>,
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cte::CommonTableExpression;
