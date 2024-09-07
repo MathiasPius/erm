@@ -1,7 +1,7 @@
 #![feature(macro_metavar_expr)]
 
 mod component;
-mod cte;
+pub mod cte;
 mod offsets;
 
 pub use component::{Archetype, Component, Get, Insert, List};

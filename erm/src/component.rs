@@ -43,59 +43,6 @@ pub trait Component<DB: Database>: Sized {
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
 }
 
-// impl Component<Sqlite> for Position {
-//     fn table() -> &'static str {
-//         "positions"
-//     }
-
-//     fn columns() -> &'static [&'static str] {
-//         &["x", "y"]
-//     }
-
-//     fn deserialize_fields(row: &mut OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
-//         let x = row.try_get()?;
-//         let y = row.try_get()?;
-
-//         Ok(Position { x, y })
-//     }
-
-//     fn serialize_fields<'q>(
-//         &self,
-//         query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-//     ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-//         query.bind(self.x).bind(self.y)
-//     }
-// }
-
-// impl Component<Sqlite> for RealName {
-//     fn table() -> &'static str {
-//         "real_names"
-//     }
-
-//     fn columns() -> &'static [&'static str] {
-//         &["real_name"]
-//     }
-
-//     fn deserialize_fields(row: &mut OffsetRow<SqliteRow>) -> Result<Self, sqlx::Error> {
-//         let name: String = row.try_get()?;
-
-//         Ok(RealName { real_name: name })
-//     }
-
-//     fn serialize_fields<'q>(
-//         &'q self,
-//         query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-//     ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-//         query.bind(&self.real_name)
-//     }
-// }
-
-// #[derive(Debug)]
-// pub struct Person {
-//     position: Position,
-//     name: RealName,
-// }
-
 pub trait Archetype<DB: Database>: Sized {
     fn insert_statement() -> String;
 

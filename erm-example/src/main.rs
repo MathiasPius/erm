@@ -1,8 +1,5 @@
 use erm::{Archetype, Component};
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    SqlitePool,
-};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 #[derive(Debug, Component)]
 struct Position {
@@ -16,13 +13,11 @@ struct Velocity {
     y: f32,
 }
 
-/*
 #[derive(Debug, Archetype)]
 struct PhysicsObject {
     pub position: Position,
     pub velocity: Velocity,
 }
-     */
 
 #[tokio::main]
 async fn main() {
