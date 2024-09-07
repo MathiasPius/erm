@@ -1,4 +1,5 @@
 use erm::{Archetype, Component};
+use futures::StreamExt as _;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Executor as _,
@@ -34,50 +35,21 @@ async fn main() {
         .await
         .unwrap();
 
-    db.execute(
-        r#"
-            create table if not exists position(
-                entity text primary key,
-                x real,
-                y real
-            );
-            "#,
-    )
-    .await
-    .unwrap();
+    Position::create(&db).await.unwrap();
+    Label::create(&db).await.unwrap();
 
-    db.execute(
-        r#"
-            create table if not exists label(
-                entity text primary key,
-                label text
-            );
-            "#,
-    )
-    .await
-    .unwrap();
-
-    db.execute(
-        r#"
-            insert or ignore into position(entity, x, y) values('a', 10.0, 20.0);
-            insert or ignore into position(entity, x, y) values('b', 30.0, 40.0);
-            insert or ignore into label(entity, label) values("a", "first");
-            insert or ignore into label(entity, label) values("b", "second");
-        "#,
-    )
-    .await
-    .unwrap();
-
-    let result = PhysicsObject::get(&db, &"a").await.unwrap();
-
-    let third = PhysicsObject {
+    let to_insert = PhysicsObject {
         position: Position { x: 111.0, y: 222.0 },
         label: Label {
             label: "Something goes here?".to_string(),
         },
     };
 
-    third.insert(&db, &"c").await.unwrap();
+    to_insert.insert(&db, &"c").await.unwrap();
 
-    println!("{result:#?}");
+    println!("{:#?}", PhysicsObject::get(&db, &"c").await.unwrap());
+
+    while let Some(obj) = PhysicsObject::list(&db).next().await {
+        println!("{obj:#?}");
+    }
 }

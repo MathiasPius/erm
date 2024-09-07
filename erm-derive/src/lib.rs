@@ -27,6 +27,26 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             }
         });
 
+        let definition_sets = std::iter::repeat("{} {}".to_string())
+            .take(data.fields.len())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let table_literal = format!(
+            "create table {}(
+            entity {{}} primary key, {})",
+            table, definition_sets
+        );
+
+        let definitions = data.fields.iter().map(|field| {
+            let name = field.ident.as_ref().unwrap().to_string();
+            let typename = &field.ty;
+
+            quote! {
+                #name, <#typename as ::sqlx::Type<::sqlx::#database>>::type_info().name()
+            }
+        });
+
         let unpack = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap();
             let typename = &field.ty;
@@ -75,6 +95,22 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
                 ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
                     query #(#binds)*
+                }
+
+                fn create<'e, E>(
+                    executor: &'e E,
+                ) -> impl ::core::future::Future<Output = Result<<::sqlx::#database as ::sqlx::Database>::QueryResult, ::sqlx::Error>> + Send where
+                &'e E: ::sqlx::Executor<'e, Database = ::sqlx::#database> {
+                    use ::sqlx::TypeInfo;
+
+                    static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                    let sql = SQL.get_or_init(||
+                        format!(#table_literal, <String as ::sqlx::Type<::sqlx::#database>>::type_info().name(), #(#definitions),*)
+                    ).as_str();
+
+                    println!("{sql}");
+
+                    executor.execute(sql)
                 }
 
             }

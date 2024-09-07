@@ -50,6 +50,8 @@ pub trait Archetype<DB: Database>: Sized {
                 )
             });
 
+            println!("{sql}");
+
             let result: Rowed<Self> = sqlx::query_as(&sql)
                 .bind(entity)
                 .fetch_one(executor)
@@ -80,6 +82,8 @@ pub trait Archetype<DB: Database>: Sized {
                 cte.name()
             )
         });
+
+        println!("{sql}");
 
         let query = sqlx::query_as(&sql);
 

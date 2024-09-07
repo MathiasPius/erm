@@ -7,4 +7,5 @@ edition = "2021"
 uuid = { workspace = true }
 erm = { workspace = true, features = ["sqlite", "uuid"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+sqlx = { workspace = true, features = ["runtime-tokio"] }
+futures = { workspace = true }

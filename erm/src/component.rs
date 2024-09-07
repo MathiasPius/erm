@@ -1,4 +1,4 @@
-use sqlx::{query::Query, Database};
+use sqlx::{query::Query, Database, Executor};
 
 use crate::OffsetRow;
 
@@ -26,6 +26,12 @@ pub trait Component<DB: Database>: Sized {
         &'q self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
+
+    fn create<'e, E>(
+        executor: &'e E,
+    ) -> impl std::future::Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
+    where
+        &'e E: Executor<'e, Database = DB>;
 }
 
 #[cfg(test)]
