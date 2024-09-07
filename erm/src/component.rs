@@ -23,11 +23,11 @@ use crate::{
 #[derive(Debug)]
 struct Rowed<T>(pub T);
 
-impl<'r, R: Row, T: Deserializer<<R as Row>::Database>> FromRow<'r, R> for Rowed<T> {
+impl<'r, R: Row, T: Archetype<<R as Row>::Database>> FromRow<'r, R> for Rowed<T> {
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
         let mut row = OffsetRow::new(row);
         Ok(Rowed(
-            <T as Deserializer<<R as Row>::Database>>::deserialize_components(&mut row).unwrap(),
+            <T as Archetype<<R as Row>::Database>>::deserialize_components(&mut row).unwrap(),
         ))
     }
 }
@@ -96,38 +96,31 @@ pub trait Component<DB: Database>: Sized {
 //     name: RealName,
 // }
 
-pub trait Serializer<Entity, DB: Database>: Sized
-where
-    Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-{
+pub trait Archetype<DB: Database>: Sized {
     fn insert_statement() -> String;
 
     fn serialize_components<'q>(
         &'q self,
-        entity: &'q Entity,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
-}
 
-pub trait Deserializer<DB: Database>: Sized {
-    fn cte() -> impl CommonTableExpression;
+    fn select_statement() -> impl CommonTableExpression;
 
     fn deserialize_components(
         row: &mut OffsetRow<<DB as Database>::Row>,
     ) -> Result<Self, sqlx::Error>;
 }
 
-impl<Entity, T, DB: Database> Serializer<Entity, DB> for T
+impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
-    Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     fn insert_statement() -> String {
         let table = <T as Component<DB>>::table();
         let columns = <T as Component<DB>>::columns();
 
         format!(
-            "insert into {}(entity, {}) values(?, {})",
+            "insert into {}(entity, {}) values(?1, {})",
             table,
             columns.join(", "),
             std::iter::repeat("?")
@@ -139,19 +132,12 @@ where
 
     fn serialize_components<'q>(
         &'q self,
-        entity: &'q Entity,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>> {
-        let query = query.bind(entity);
         <Self as Component<DB>>::serialize_fields(self, query)
     }
-}
 
-impl<T, DB: Database> Deserializer<DB> for T
-where
-    T: Component<DB>,
-{
-    fn cte() -> impl CommonTableExpression {
+    fn select_statement() -> impl CommonTableExpression {
         Select {
             table: <T as Component<DB>>::table().to_string(),
             columns: <T as Component<DB>>::columns()
@@ -168,86 +154,40 @@ where
     }
 }
 
-// impl<Entity> Serializer<Entity, Sqlite> for Person
-// where
-//     Entity: for<'q> sqlx::Encode<'q, Sqlite> + sqlx::Type<Sqlite> + 'static,
-// {
-//     fn insert_statement() -> String {
-//         vec![
-//             <Position as Serializer<Entity, Sqlite>>::insert_statement(),
-//             <RealName as Serializer<Entity, Sqlite>>::insert_statement(),
-//         ]
-//         .join(";\n")
-//     }
-
-//     fn serialize_components<'q>(
-//         &'q self,
-//         entity: &'q Entity,
-//         query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-//     ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-//         let query = self.position.serialize_components(entity, query);
-//         let query = self.name.serialize_components(entity, query);
-
-//         query
-//     }
-// }
-
-// impl Deserializer<Sqlite> for Person {
-//     fn cte() -> impl CommonTableExpression {
-//         <(Position, RealName) as Deserializer<Sqlite>>::cte()
-//     }
-
-//     fn deserialize_components(
-//         row: &mut OffsetRow<<Sqlite as Database>::Row>,
-//     ) -> Result<Self, sqlx::Error> {
-//         let (position, name) =
-//             <(Position, RealName) as Deserializer<Sqlite>>::deserialize_components(row)?;
-
-//         Ok(Person { position, name })
-//     }
-// }
-
 macro_rules! impl_compound_for_db{
     ($db:ident, $($list:ident),*) => {
-        impl<Entity, $($list),*> Serializer<Entity, $db> for ($($list,)*)
+        impl<$($list),*> Archetype<$db> for ($($list,)*)
         where
-            $($list: Serializer<Entity, $db>,)*
-            Entity: for<'q> sqlx::Encode<'q, $db> + sqlx::Type<$db> + 'static,
+            $($list: Archetype<$db>,)*
         {
             fn insert_statement() -> String {
                 vec![
-                    $(<$list as Serializer<Entity, $db>>::insert_statement()),*
+                    $(<$list as Archetype<$db>>::insert_statement()),*
                 ]
                 .join(";\n")
             }
 
             fn serialize_components<'q>(
                 &'q self,
-                entity: &'q Entity,
                 query: Query<'q, $db, <$db as Database>::Arguments<'q>>,
             ) -> Query<'q, $db, <$db as Database>::Arguments<'q>> {
                 $(
                     #[allow(unused)]
                     const $list: () = ();
-                    let query = self.${index()}.serialize_components(entity, query);
+                    let query = self.${index()}.serialize_components(query);
                 )*
 
                 query
             }
-        }
 
-        impl<$($list),*> Deserializer<$db> for ($($list,)*)
-        where
-            $($list: Deserializer<$db>,)*
-        {
-            fn cte() -> impl CommonTableExpression {
+            fn select_statement() -> impl CommonTableExpression {
                 InnerJoin {
                     left: (
-                        Box::new(<A as Deserializer<$db>>::cte()),
+                        Box::new(<A as Archetype<$db>>::select_statement()),
                         "entity".to_string(),
                     ),
                     right: (
-                        Box::new(<B as Deserializer<$db>>::cte()),
+                        Box::new(<B as Archetype<$db>>::select_statement()),
                         "entity".to_string(),
                     ),
                 }
@@ -258,7 +198,7 @@ macro_rules! impl_compound_for_db{
             ) -> Result<Self, sqlx::Error> {
                 Ok((
                     $(
-                        <$list as Deserializer<$db>>::deserialize_components(row)?,
+                        <$list as Archetype<$db>>::deserialize_components(row)?,
                     )*
                 ))
             }
@@ -282,7 +222,7 @@ impl_compound!(A, B, C, D, E, F, G, H);
 impl_compound!(A, B, C, D, E, F, G, H, I);
 impl_compound!(A, B, C, D, E, F, G, H, I, J);
 
-pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static {
+pub trait List<'q, DB: Database>: Archetype<DB> + Sized + Unpin + Send + Sync + 'static {
     fn list<'e, E>(
         executor: &'e E,
     ) -> Pin<Box<dyn Stream<Item = Result<Self, sqlx::Error>> + Send + 'e>>
@@ -293,7 +233,7 @@ pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync
     {
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
-            let cte = <Self as Deserializer<DB>>::cte();
+            let cte = <Self as Archetype<DB>>::select_statement();
 
             format!(
                 "{}\nselect {} from {}",
@@ -321,11 +261,11 @@ pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync
 impl<'q, DB, T> List<'q, DB> for T
 where
     DB: Database,
-    T: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static,
+    T: Archetype<DB> + Sized + Unpin + Send + Sync + 'static,
 {
 }
 
-pub trait Get<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static {
+pub trait Get<'q, DB: Database>: Archetype<DB> + Sized + Unpin + Send + Sync + 'static {
     async fn get<'e, E, Entity>(executor: &'e E, entity: Entity) -> Result<Self, sqlx::Error>
     where
         Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + 'q,
@@ -335,7 +275,7 @@ pub trait Get<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync 
     {
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
-            let cte = <Self as Deserializer<DB>>::cte();
+            let cte = <Self as Archetype<DB>>::select_statement();
 
             format!(
                 "{}\nselect {} from {} where entity = ?",
@@ -362,12 +302,12 @@ pub trait Get<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync 
 impl<'q, DB, T> Get<'q, DB> for T
 where
     DB: Database,
-    T: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static,
+    T: Archetype<DB> + Sized + Unpin + Send + Sync + 'static,
 {
 }
 
 pub trait Insert<Entity, DB: Database>:
-    Serializer<Entity, DB> + Sized + Unpin + Send + Sync + 'static
+    Archetype<DB> + Sized + Unpin + Send + Sync + 'static
 where
     Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
@@ -383,10 +323,10 @@ where
     {
         static SQL: OnceLock<String> = OnceLock::new();
 
-        let sql = SQL.get_or_init(|| <Self as Serializer<Entity, DB>>::insert_statement());
+        let sql = SQL.get_or_init(|| <Self as Archetype<DB>>::insert_statement());
 
-        let query = sqlx::query(sql);
-        let query = self.serialize_components(&entity, query);
+        let query = sqlx::query(sql).bind(entity);
+        let query = self.serialize_components(query);
 
         executor.execute(query).await
     }
@@ -395,7 +335,63 @@ where
 impl<Entity, DB, T> Insert<Entity, DB> for T
 where
     DB: Database,
-    T: Serializer<Entity, DB> + Sized + Unpin + Send + Sync + 'static,
+    T: Archetype<DB> + Sized + Unpin + Send + Sync + 'static,
     Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::{
+        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+        Executor as _,
+    };
+
+    #[tokio::test]
+    async fn test_func() {
+        let options = SqliteConnectOptions::new().in_memory(true);
+
+        let db = SqlitePoolOptions::new()
+            .min_connections(1)
+            .max_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(options)
+            .await
+            .unwrap();
+
+        db.execute(
+            r#"
+            create table if not exists positions(
+                entity text primary key,
+                x real,
+                y real
+            );
+            "#,
+        )
+        .await
+        .unwrap();
+
+        db.execute(
+            r#"
+            create table if not exists real_names(
+                entity text primary key,
+                real_name text
+            );
+            "#,
+        )
+        .await
+        .unwrap();
+
+        db.execute(
+            r#"
+            insert or ignore into positions(entity, x, y) values('a', 10.0, 20.0);
+            insert or ignore into positions(entity, x, y) values('b', 30.0, 40.0);
+            insert or ignore into real_names(entity, real_name) values("a", "first");
+            insert or ignore into real_names(entity, real_name) values("b", "second");
+        "#,
+        )
+        .await
+        .unwrap();
+    }
 }
