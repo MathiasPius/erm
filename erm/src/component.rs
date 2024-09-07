@@ -207,59 +207,80 @@ where
 //     }
 // }
 
-impl<Entity, A, B> Serializer<Entity, Sqlite> for (A, B)
-where
-    A: Serializer<Entity, Sqlite>,
-    B: Serializer<Entity, Sqlite>,
-    Entity: for<'q> sqlx::Encode<'q, Sqlite> + sqlx::Type<Sqlite> + 'static,
-{
-    fn insert_statement() -> String {
-        vec![
-            <A as Serializer<Entity, Sqlite>>::insert_statement(),
-            <B as Serializer<Entity, Sqlite>>::insert_statement(),
-        ]
-        .join(";\n")
-    }
+macro_rules! impl_compound_for_db{
+    ($db:ident, $($list:ident),*) => {
+        impl<Entity, $($list),*> Serializer<Entity, $db> for ($($list,)*)
+        where
+            $($list: Serializer<Entity, $db>,)*
+            Entity: for<'q> sqlx::Encode<'q, $db> + sqlx::Type<$db> + 'static,
+        {
+            fn insert_statement() -> String {
+                vec![
+                    $(<$list as Serializer<Entity, $db>>::insert_statement()),*
+                ]
+                .join(";\n")
+            }
 
-    fn serialize_components<'q>(
-        &'q self,
-        entity: &'q Entity,
-        query: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
-    ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
-        let query = self.0.serialize_components(entity, query);
-        let query = self.1.serialize_components(entity, query);
+            fn serialize_components<'q>(
+                &'q self,
+                entity: &'q Entity,
+                query: Query<'q, $db, <$db as Database>::Arguments<'q>>,
+            ) -> Query<'q, $db, <$db as Database>::Arguments<'q>> {
+                $(
+                    #[allow(unused)]
+                    const $list: () = ();
+                    let query = self.${index()}.serialize_components(entity, query);
+                )*
 
-        query
-    }
-}
-
-impl<A, B> Deserializer<Sqlite> for (A, B)
-where
-    A: Deserializer<Sqlite>,
-    B: Deserializer<Sqlite>,
-{
-    fn cte() -> impl CommonTableExpression {
-        InnerJoin {
-            left: (
-                Box::new(<A as Deserializer<Sqlite>>::cte()),
-                "entity".to_string(),
-            ),
-            right: (
-                Box::new(<B as Deserializer<Sqlite>>::cte()),
-                "entity".to_string(),
-            ),
+                query
+            }
         }
-    }
 
-    fn deserialize_components(
-        row: &mut OffsetRow<<Sqlite as Database>::Row>,
-    ) -> Result<Self, sqlx::Error> {
-        let a = <A as Deserializer<Sqlite>>::deserialize_components(row)?;
-        let b = <B as Deserializer<Sqlite>>::deserialize_components(row)?;
+        impl<$($list),*> Deserializer<$db> for ($($list,)*)
+        where
+            $($list: Deserializer<$db>,)*
+        {
+            fn cte() -> impl CommonTableExpression {
+                InnerJoin {
+                    left: (
+                        Box::new(<A as Deserializer<$db>>::cte()),
+                        "entity".to_string(),
+                    ),
+                    right: (
+                        Box::new(<B as Deserializer<$db>>::cte()),
+                        "entity".to_string(),
+                    ),
+                }
+            }
 
-        Ok((a, b))
-    }
+            fn deserialize_components(
+                row: &mut OffsetRow<<$db as Database>::Row>,
+            ) -> Result<Self, sqlx::Error> {
+                Ok((
+                    $(
+                        <$list as Deserializer<$db>>::deserialize_components(row)?,
+                    )*
+                ))
+            }
+        }
+    };
 }
+
+macro_rules! impl_compound {
+    ($($list:ident),*) => {
+        impl_compound_for_db!(Sqlite, $($list),*);
+    };
+}
+
+impl_compound!(A, B);
+impl_compound!(A, B, C);
+impl_compound!(A, B, C, D);
+impl_compound!(A, B, C, D, E);
+impl_compound!(A, B, C, D, E, F);
+impl_compound!(A, B, C, D, E, F, G);
+impl_compound!(A, B, C, D, E, F, G, H);
+impl_compound!(A, B, C, D, E, F, G, H, I);
+impl_compound!(A, B, C, D, E, F, G, H, I, J);
 
 pub trait List<'q, DB: Database>: Deserializer<DB> + Sized + Unpin + Send + Sync + 'static {
     fn list<'e, E>(
