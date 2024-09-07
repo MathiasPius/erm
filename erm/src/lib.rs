@@ -4,7 +4,7 @@ mod component;
 pub mod cte;
 mod offsets;
 
-pub use component::{Archetype, Component, Get, Insert, List};
+pub use component::{Archetype, Component, Insert, List};
 pub use offsets::OffsetRow;
 
 #[cfg(feature = "derive")]

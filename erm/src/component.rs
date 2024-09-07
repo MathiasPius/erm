@@ -56,6 +56,43 @@ pub trait Archetype<DB: Database>: Sized {
     fn deserialize_components(
         row: &mut OffsetRow<<DB as Database>::Row>,
     ) -> Result<Self, sqlx::Error>;
+
+    fn get<E, Entity>(
+        executor: E,
+        entity: Entity,
+    ) -> impl std::future::Future<Output = Result<Self, sqlx::Error>> + Send
+    where
+        Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB> + Send + Sync + 'static,
+        for<'q> <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
+        E: for<'e> Executor<'e, Database = DB> + Send + Sync,
+        Self: Unpin + Send + Sync,
+    {
+        async move {
+            static SQL: OnceLock<String> = OnceLock::new();
+            let sql = SQL.get_or_init(|| {
+                let cte = <Self as Archetype<DB>>::select_statement();
+
+                format!(
+                    "{}\nselect {} from {} where entity = ?",
+                    cte.finalize(),
+                    cte.columns()
+                        .iter()
+                        .map(|(_, column)| format!("{}.{column}", cte.name()))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    cte.name()
+                )
+            });
+
+            println!("{sql}");
+            let result: Rowed<Self> = sqlx::query_as(&sql)
+                .bind(entity)
+                .fetch_one(executor)
+                .await?;
+
+            Ok(result.0)
+        }
+    }
 }
 
 impl<T, DB: Database> Archetype<DB> for T
@@ -206,47 +243,6 @@ pub trait List<'q, DB: Database>: Archetype<DB> + Sized + Unpin + Send + Sync + 
 }
 
 impl<'q, DB, T> List<'q, DB> for T
-where
-    DB: Database,
-    T: Archetype<DB> + Sized + Unpin + Send + Sync + 'static,
-{
-}
-
-pub trait Get<'q, DB: Database>: Archetype<DB> + Sized + Unpin + Send + Sync + 'static {
-    async fn get<'e, E, Entity>(executor: &'e E, entity: Entity) -> Result<Self, sqlx::Error>
-    where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + 'q,
-        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
-        &'e E: Executor<'e, Database = DB>,
-        'q: 'e,
-    {
-        static SQL: OnceLock<String> = OnceLock::new();
-        let sql = SQL.get_or_init(|| {
-            let cte = <Self as Archetype<DB>>::select_statement();
-
-            format!(
-                "{}\nselect {} from {} where entity = ?",
-                cte.finalize(),
-                cte.columns()
-                    .iter()
-                    .map(|(_, column)| format!("{}.{column}", cte.name()))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                cte.name()
-            )
-        });
-
-        println!("{sql}");
-        let result: Rowed<Self> = sqlx::query_as(&sql)
-            .bind(entity)
-            .fetch_one(executor)
-            .await?;
-
-        Ok(result.0)
-    }
-}
-
-impl<'q, DB, T> Get<'q, DB> for T
 where
     DB: Database,
     T: Archetype<DB> + Sized + Unpin + Send + Sync + 'static,

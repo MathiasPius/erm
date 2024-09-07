@@ -52,7 +52,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             let name = field.ident.as_ref().unwrap();
 
             quote! {
-                .bind(self.#name)
+                .bind(&self.#name)
             }
         })
         .collect();

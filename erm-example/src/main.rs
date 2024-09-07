@@ -8,15 +8,14 @@ struct Position {
 }
 
 #[derive(Debug, Component)]
-struct Velocity {
-    x: f32,
-    y: f32,
+struct Label {
+    label: String,
 }
 
 #[derive(Debug, Archetype)]
 struct PhysicsObject {
+    pub label: Label,
     pub position: Position,
-    pub velocity: Velocity,
 }
 
 #[tokio::main]
@@ -31,6 +30,8 @@ async fn main() {
         .connect_with(options)
         .await
         .unwrap();
+
+    let result = PhysicsObject::get(&db, 1234).await.unwrap();
 
     /*
     backend.init::<Position>().await;
