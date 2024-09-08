@@ -53,6 +53,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
             quote! {
                 let #name = row.try_get::<#typename>();
+                println!("fetched {}: {:?}", ::std::any::type_name::<#typename>(), #name);
             }
         });
 
@@ -83,11 +84,15 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                 }
 
                 fn deserialize_fields(row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {
+                    ::tracing::trace!("deserializing component {}", ::std::any::type_name::<Self>());
+
                     #(#unpack;)*
 
-                    Ok(#component_name {
+                    let component = #component_name {
                         #(#repack,)*
-                    })
+                    };
+
+                    Ok(component)
                 }
 
                 fn serialize_fields<'q>(
@@ -107,8 +112,6 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     let sql = SQL.get_or_init(||
                         format!(#table_literal, <String as ::sqlx::Type<::sqlx::#database>>::type_info().name(), #(#definitions),*)
                     ).as_str();
-
-                    println!("{sql}");
 
                     executor.execute(sql)
                 }
@@ -238,6 +241,8 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                 fn deserialize_components(
                     row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>,
                 ) -> Result<Self, ::sqlx::Error> {
+                    ::tracing::trace!("deserializing archetype {}", ::std::any::type_name::<Self>());
+
                     #(#unpack;)*
 
                     Ok(#archetype_name {

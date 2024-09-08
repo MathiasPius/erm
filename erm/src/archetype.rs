@@ -1,7 +1,8 @@
 use std::sync::OnceLock;
 
 use futures::{Stream, StreamExt as _};
-use sqlx::{query::Query, Database, Executor, IntoArguments};
+use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments};
+use tracing::{instrument, span, Instrument, Level};
 
 use crate::{
     cte::{CommonTableExpression, InnerJoin, Select},
@@ -29,16 +30,20 @@ pub trait Archetype<DB: Database>: Sized {
     ) -> impl std::future::Future<Output = Result<Self, sqlx::Error>> + Send
     where
         &'a Entity: sqlx::Encode<'a, DB> + sqlx::Type<DB> + Send + Sync + 'static,
+        Entity: for<'r> sqlx::Decode<'r, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
         for<'q> <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
         E: for<'e> Executor<'e, Database = DB> + Send + Sync,
         Self: Unpin + Send + Sync,
+        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
+        let span = span!(Level::TRACE, "get");
+
         async move {
             static SQL: OnceLock<String> = OnceLock::new();
             let sql = SQL.get_or_init(|| {
                 let cte = <Self as Archetype<DB>>::select_statement();
 
-                format!(
+                let sql = format!(
                     "{}\nselect {} from {} where entity = ?",
                     cte.finalize(),
                     cte.columns()
@@ -47,33 +52,41 @@ pub trait Archetype<DB: Database>: Sized {
                         .collect::<Vec<_>>()
                         .join(", "),
                     cte.name()
-                )
+                );
+                sql
             });
 
-            println!("{sql}");
-
-            let result: Rowed<Self> = sqlx::query_as(&sql)
+            let result: Rowed<Entity, Self> = sqlx::query_as(&sql)
                 .bind(entity)
                 .fetch_one(executor)
                 .await?;
 
-            Ok(result.0)
+            Ok(result.inner)
         }
+        .instrument(span)
     }
 
-    fn list<'e, E>(executor: &'e E) -> impl Stream<Item = Result<Self, sqlx::Error>> + Send
+    #[instrument(name = "list")]
+    fn list<'e, Entity, E>(
+        executor: &'e E,
+    ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
         for<'q> <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
         &'e E: Executor<'e, Database = DB>,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
         Self: Unpin + Send + Sync + 'static,
+        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
+        println!("constructing list stream");
+
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
             let cte = <Self as Archetype<DB>>::select_statement();
 
             format!(
-                "{}\nselect {} from {}",
+                "{}\nselect {}.entity, {} from {}",
                 cte.finalize(),
+                cte.name(),
                 cte.columns()
                     .iter()
                     .map(|(_, column)| format!("{}.{column}", cte.name()))
@@ -83,17 +96,14 @@ pub trait Archetype<DB: Database>: Sized {
             )
         });
 
-        println!("{sql}");
-
         let query = sqlx::query_as(&sql);
 
-        Box::pin(
-            query
-                .fetch(executor)
-                .map(|row| row.map(|result: Rowed<Self>| result.0)),
-        )
+        query
+            .fetch(executor)
+            .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
+    #[instrument(name = "insert", skip(self))]
     fn insert<'q, 'e, E, Entity>(
         &'q self,
         executor: &'e E,
@@ -102,7 +112,7 @@ pub trait Archetype<DB: Database>: Sized {
     where
         <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
         &'e E: Executor<'e, Database = DB>,
-        &'q Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        &'q Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug,
         'q: 'e,
     {
         static SQL: OnceLock<String> = OnceLock::new();

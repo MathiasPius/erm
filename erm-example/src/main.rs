@@ -4,16 +4,19 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Executor as _,
 };
+use tracing::info;
 
 #[derive(Debug, Component)]
 struct Position {
-    x: f32,
-    y: f32,
+    name: String,
+    x: u32,
+    y: u32,
 }
 
 #[derive(Debug, Component)]
 struct Label {
     label: String,
+    label2: String,
 }
 
 #[derive(Debug, Archetype)]
@@ -24,6 +27,8 @@ struct PhysicsObject {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     let options = SqliteConnectOptions::new().in_memory(true);
 
     let db = SqlitePoolOptions::new()
@@ -39,17 +44,30 @@ async fn main() {
     Label::create(&db).await.unwrap();
 
     let to_insert = PhysicsObject {
-        position: Position { x: 111.0, y: 222.0 },
+        position: Position {
+            name: "lol?".to_string(),
+            x: 111,
+            y: 222,
+        },
         label: Label {
             label: "Something goes here?".to_string(),
+            label2: "Label 2".to_string(),
         },
     };
 
+    info!("inserting");
+
+    to_insert.insert(&db, &"a").await.unwrap();
     to_insert.insert(&db, &"c").await.unwrap();
 
-    println!("{:#?}", PhysicsObject::get(&db, &"c").await.unwrap());
+    info!("listing");
 
-    while let Some(obj) = PhysicsObject::list(&db).next().await {
-        println!("{obj:#?}");
+    while let Some(result) = PhysicsObject::list::<String, _>(&db).next().await {
+        let (entity, obj) = result.unwrap();
+        println!("{entity}: {obj:#?}");
     }
+
+    info!("getting");
+
+    //println!("{:#?}", PhysicsObject::get(&db, &"c").await.unwrap());
 }

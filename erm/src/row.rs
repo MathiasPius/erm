@@ -1,4 +1,5 @@
 use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row};
+use tracing::trace;
 
 use crate::Archetype;
 
@@ -23,20 +24,42 @@ impl<'r, R: Row> OffsetRow<'r, R> {
         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
         usize: ColumnIndex<R>,
     {
+        trace!(
+            "reading row {} from {:?} as {:?}",
+            self.offset,
+            self.row.try_column(self.offset),
+            std::any::type_name::<T>()
+        );
+
+        let result = self.row.try_get::<'a, T, usize>(self.offset);
         self.offset += 1;
-        self.row.try_get(self.offset - 1)
+        result
     }
 }
 
 /// FromRow-implementing wrapper around Components
 #[derive(Debug)]
-pub(crate) struct Rowed<T>(pub T);
+pub(crate) struct Rowed<Entity, T> {
+    pub entity: Entity,
+    pub inner: T,
+}
 
-impl<'r, R: Row, T: Archetype<<R as Row>::Database>> FromRow<'r, R> for Rowed<T> {
+impl<'r, R, Entity, T> FromRow<'r, R> for Rowed<Entity, T>
+where
+    R: Row,
+    Entity: for<'e> sqlx::Decode<'e, <R as sqlx::Row>::Database>
+        + sqlx::Type<<R as sqlx::Row>::Database>,
+    T: Archetype<<R as Row>::Database>,
+    usize: ColumnIndex<R>,
+{
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
+        trace!("parsing row with columns {:?}", row.columns());
         let mut row = OffsetRow::new(row);
-        Ok(Rowed(
-            <T as Archetype<<R as Row>::Database>>::deserialize_components(&mut row).unwrap(),
-        ))
+        let entity = row.try_get::<Entity>()?;
+        println!("extracted entity!");
+        Ok(Rowed {
+            entity,
+            inner: <T as Archetype<<R as Row>::Database>>::deserialize_components(&mut row)?,
+        })
     }
 }
