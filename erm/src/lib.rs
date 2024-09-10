@@ -8,6 +8,7 @@ mod row;
 
 pub use archetype::Archetype;
 pub use component::{ColumnDefinition, Component};
+pub use insert::InsertionQuery;
 pub use row::OffsetRow;
 
 #[cfg(feature = "derive")]

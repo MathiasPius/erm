@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{marker::PhantomData, sync::OnceLock};
 
 use sqlx::{query::Query, Database, Executor};
 
@@ -20,20 +20,21 @@ impl<DB: Database> ColumnDefinition<DB> {
 }
 
 /// Describes reading and writing from a Component-specific Table.
-pub trait Component<DB: Database>: Sized {
+pub trait Component<DB: Database>: std::fmt::Debug + Sized {
+    fn insertion_query_static() -> &'static OnceLock<String>;
     fn table() -> &'static str;
     fn columns() -> Vec<ColumnDefinition<DB>>;
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
     fn serialize_fields<'q>(
-        &self,
+        &'q self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
 
-    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
     where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
     {
-        static SQL: OnceLock<String> = OnceLock::new();
+        let sql = Self::insertion_query_static();
 
         let table = Self::table();
 
@@ -46,15 +47,19 @@ pub trait Component<DB: Database>: Sized {
             .iter()
             .chain(Self::columns().iter())
             .map(|column| column.name())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
 
         let bindings = std::iter::repeat("?")
             .take(columns.len())
             .collect::<Vec<_>>()
             .join(", ");
 
-        let sql = SQL.get_or_init(|| format!("insert into {table}({columns}) values({bindings})"));
+        let columns = columns.join(", ");
+
+        let sql = sql.get_or_init(|| format!("insert into {table}({columns}) values({bindings})"));
+
+        println!("{sql}");
+        println!("{self:#?}");
 
         query.query(sql, move |query| self.serialize_fields(query))
     }

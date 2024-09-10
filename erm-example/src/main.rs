@@ -57,12 +57,8 @@ async fn main() {
         },
     };
 
-    info!("inserting");
-
-    to_insert.insert(&db, &"a").await.unwrap();
-    to_insert.insert(&db, &"c").await.unwrap();
-
-    panic!();
+    to_insert.insert(&db, &"a").await;
+    to_insert.insert(&db, &"c").await;
 
     info!("listing");
 

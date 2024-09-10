@@ -77,6 +77,11 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
         quote! {
             impl ::erm::Component<::sqlx::#database> for #component_name {
+                fn insertion_query_static() -> &'static ::std::sync::OnceLock<String> {
+                    static SQL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+                    &SQL
+                }
+
                 fn table() -> &'static str {
                     #table
                 }
@@ -219,14 +224,30 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             })
             .collect();
 
+        let insertion_queries = data.fields.iter().map(|field| {
+            let name = field.ident.as_ref().unwrap();
+            let typename = &field.ty;
+
+            quote! {
+                <#typename as ::erm::Archetype<::sqlx::#database>>::insertion_query(&self.#name, query);
+            }
+        });
+
         quote! {
-            impl Archetype<::sqlx::#database> for #archetype_name
+            impl ::erm::Archetype<::sqlx::#database> for #archetype_name
             {
                 fn insert_statement() -> String {
                     vec![
                         #(#insert_statements,)*
                     ]
                     .join(";\n")
+                }
+
+                fn insertion_query<'q, Entity>(&'q self, query: &mut ::erm::InsertionQuery<'q, ::sqlx::#database, Entity>)
+                where
+                    Entity: sqlx::Encode<'q, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + std::fmt::Debug + Clone + 'q
+                {
+                    #(#insertion_queries)*
                 }
 
                 fn serialize_components<'q>(

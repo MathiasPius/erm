@@ -37,7 +37,9 @@ pub trait CommonTableExpression: 'static {
             wheres = format!("\n    where\n  {wheres}");
         }
 
-        format!("    select\n    {columns}, 1 as __dummy\n    from\n      {left}{joins}{wheres}")
+        format!(
+            "    select\n    {left}.entity,\n    {columns}\n    from\n      {left}{joins}{wheres}"
+        )
     }
 
     fn columns(&self) -> Vec<(Table, Column)> {

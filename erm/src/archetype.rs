@@ -14,9 +14,9 @@ use crate::{
 pub trait Archetype<DB: Database>: Sized {
     fn insert_statement() -> String;
 
-    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
     where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q;
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + std::fmt::Debug + 'q;
 
     fn serialize_components<'q>(
         &'q self,
@@ -82,6 +82,8 @@ pub trait Archetype<DB: Database>: Sized {
             cte.serialize()
         });
 
+        println!("{sql}");
+
         let query = sqlx::query_as(&sql);
 
         query
@@ -126,13 +128,14 @@ pub trait Archetype<DB: Database>: Sized {
     }
      */
 
-    async fn insert<'e, 'q, Exec, Entity>(&self, executor: Exec, entity: Entity)
-    where
-        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
-        Exec: Executor<'e, Database = DB> + Acquire<'e, Database = DB>,
-        Transaction<'e, DB>: Executor<'e, Database = DB>,
-        for<'t> &'t mut <DB as Database>::Connection: Executor<'t, Database = DB>,
+    async fn insert<'executor, 'transaction, 'connection, 'query, Exec, Entity>(
+        &'query self,
+        executor: &'executor Exec,
+        entity: Entity,
+    ) where
+        <DB as sqlx::Database>::Arguments<'query>: IntoArguments<'query, DB>,
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'query,
+        &'executor Exec: Executor<'executor, Database = DB> + Acquire<'connection, Database = DB>,
     {
         let mut inserts = InsertionQuery::<'_, DB, Entity> {
             queries: vec![],
@@ -141,13 +144,9 @@ pub trait Archetype<DB: Database>: Sized {
 
         <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
 
-        let mut tx = executor.begin().await.unwrap();
-
         for query in inserts.queries {
-            query.execute(&mut *tx).await.unwrap();
+            query.execute(executor).await.unwrap();
         }
-
-        tx.commit().await.unwrap()
     }
 }
 
@@ -173,10 +172,11 @@ where
         )
     }
 
-    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
     where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
     {
+        println!("inserting {}", std::any::type_name::<Self>());
         <Self as Component<DB>>::insertion_query(&self, query);
     }
 
@@ -217,9 +217,9 @@ macro_rules! impl_compound_for_db{
                 .join(";\n")
             }
 
-            fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, $db, Entity>)
+            fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, $db, Entity>)
             where
-                Entity: sqlx::Encode<'q, $db> + sqlx::Type<$db> + Clone + 'q,
+                Entity: sqlx::Encode<'q, $db> + sqlx::Type<$db> + std::fmt::Debug + Clone + 'q,
             {
                 $(
                     {

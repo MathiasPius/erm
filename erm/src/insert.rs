@@ -11,7 +11,7 @@ where
 impl<'q, DB, Entity> InsertionQuery<'q, DB, Entity>
 where
     DB: Database,
-    Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+    Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + std::fmt::Debug + 'q,
 {
     pub fn query(
         &mut self,
@@ -21,6 +21,7 @@ where
         ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) {
         let query = sqlx::query(sql).bind(self.entity.clone());
+        println!("bound first: {:?}", &self.entity);
 
         self.queries.push(f(query));
     }
