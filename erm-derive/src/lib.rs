@@ -27,14 +27,14 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             }
         });
 
-        let definition_sets = std::iter::repeat("{} {}".to_string())
+        let definition_sets = std::iter::repeat("{} {} not null".to_string())
             .take(data.fields.len())
             .collect::<Vec<_>>()
             .join(",");
 
         let table_literal = format!(
             "create table {}(
-            entity {{}} primary key, {})",
+            entity {{}} primary key not null, {}) strict;",
             table, definition_sets
         );
 
@@ -67,9 +67,11 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
         let binds = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap();
+            let stringified = name.to_string();
 
             quote! {
-                .bind(&self.#name)
+                ::tracing::trace!("serializing field {}", #stringified);
+                let query = query.bind(&self.#name);
             }
         });
 
@@ -99,7 +101,9 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     &'q self,
                     query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
                 ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
-                    query #(#binds)*
+                    #(#binds)*
+
+                    query
                 }
 
                 fn create<'e, E>(
@@ -156,10 +160,15 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             }
         });
 
-        let field_names = data
-            .fields
-            .iter()
-            .map(|field| field.ident.as_ref().unwrap());
+        let field_names = data.fields.iter().map(|field| {
+            let field_name = field.ident.as_ref().unwrap();
+            let stringified = field_name.to_string();
+
+            quote! {
+                ::tracing::trace!("serializing component {}", #stringified);
+                let query = self.#field_name.serialize_components(query);
+            }
+        });
 
         let mut field_iter = data.fields.iter();
 
@@ -224,9 +233,9 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     &'q self,
                     query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
                 ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
-                    #(
-                        let query = self.#field_names.serialize_components(query);
-                    )*
+                    ::tracing::trace!("serializing archetype {}", ::std::any::type_name::<Self>());
+
+                    #(#field_names)*
 
                     query
                 }

@@ -1,6 +1,8 @@
+use std::sync::OnceLock;
+
 use sqlx::{query::Query, Database, Executor};
 
-use crate::OffsetRow;
+use crate::{insert::InsertionQuery, OffsetRow};
 
 pub struct ColumnDefinition<DB: Database> {
     pub name: &'static str,
@@ -23,9 +25,39 @@ pub trait Component<DB: Database>: Sized {
     fn columns() -> Vec<ColumnDefinition<DB>>;
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
     fn serialize_fields<'q>(
-        &'q self,
+        &self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
+
+    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+    {
+        static SQL: OnceLock<String> = OnceLock::new();
+
+        let table = Self::table();
+
+        let entity = ColumnDefinition {
+            name: "entity",
+            type_info: <&Entity as sqlx::Type<DB>>::type_info(),
+        };
+
+        let columns = [entity]
+            .iter()
+            .chain(Self::columns().iter())
+            .map(|column| column.name())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let bindings = std::iter::repeat("?")
+            .take(columns.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let sql = SQL.get_or_init(|| format!("insert into {table}({columns}) values({bindings})"));
+
+        query.query(sql, move |query| self.serialize_fields(query))
+    }
 
     fn create<'e, E>(
         executor: &'e E,

@@ -4,8 +4,6 @@ pub type Column = String;
 pub trait CommonTableExpression: 'static {
     fn primary_table(&self) -> Table;
 
-    fn traverse(&self, out: &mut Vec<(String, String)>);
-
     fn serialize(&self) -> String {
         let columns: String = self
             .columns()
@@ -39,12 +37,8 @@ pub trait CommonTableExpression: 'static {
             wheres = format!("\n    where\n  {wheres}");
         }
 
-        format!(
-            "    select\n      {left}.entity as entity,\n    {columns}\n    from\n      {left}{joins}{wheres}"
-        )
+        format!("    select\n    {columns}, 1 as __dummy\n    from\n      {left}{joins}{wheres}")
     }
-
-    fn name(&self) -> Table;
 
     fn columns(&self) -> Vec<(Table, Column)> {
         Vec::new()
@@ -57,20 +51,6 @@ pub trait CommonTableExpression: 'static {
     fn wheres(&self) -> Vec<(Table, Column)> {
         Vec::new()
     }
-
-    fn finalize(&self) -> String {
-        let mut out = Vec::new();
-        self.traverse(&mut out);
-        out.sort_by_key(|(name, _)| name.len());
-
-        format!(
-            "with\n{}",
-            out.into_iter()
-                .map(|(name, contents)| format!("  {name} as (\n{contents}\n  )"))
-                .collect::<Vec<_>>()
-                .join(",\n"),
-        )
-    }
 }
 
 pub struct Select {
@@ -79,19 +59,11 @@ pub struct Select {
 }
 
 impl CommonTableExpression for Select {
-    fn traverse(&self, out: &mut Vec<(String, String)>) {
-        out.push((self.name(), self.serialize()));
-    }
-
     fn columns(&self) -> Vec<(Table, Column)> {
         self.columns
             .iter()
             .map(|column| (self.primary_table(), column.clone()))
             .collect()
-    }
-
-    fn name(&self) -> Table {
-        format!("cte_{}", self.primary_table())
     }
 
     fn primary_table(&self) -> Table {
@@ -105,21 +77,8 @@ pub struct Filter {
 }
 
 impl CommonTableExpression for Filter {
-    fn traverse(&self, out: &mut Vec<(String, String)>) {
-        self.inner.traverse(out);
-        out.push((self.name(), self.serialize()));
-    }
-
     fn columns(&self) -> Vec<(Table, Column)> {
-        self.inner
-            .columns()
-            .into_iter()
-            .map(|(_, column)| (self.name(), column))
-            .collect()
-    }
-
-    fn name(&self) -> Table {
-        format!("{}_filter_{}", self.inner.name(), self.clause)
+        self.inner.columns()
     }
 
     fn primary_table(&self) -> Table {
@@ -127,7 +86,9 @@ impl CommonTableExpression for Filter {
     }
 
     fn wheres(&self) -> Vec<(Table, Column)> {
-        vec![(self.primary_table(), self.clause.clone())]
+        let mut wheres = self.inner.wheres();
+        wheres.push((self.primary_table(), self.clause.clone()));
+        wheres
     }
 }
 
@@ -137,54 +98,34 @@ pub struct InnerJoin {
 }
 
 impl CommonTableExpression for InnerJoin {
-    fn traverse(&self, out: &mut Vec<(String, String)>) {
-        self.left.0.traverse(out);
-        self.right.0.traverse(out);
-        out.push((self.name(), self.serialize()));
-    }
-
     fn columns(&self) -> Vec<(Table, Column)> {
         self.left
             .0
             .columns()
             .into_iter()
-            .map(|(_, column)| (self.left.0.name(), column))
-            .chain(
-                &mut self
-                    .right
-                    .0
-                    .columns()
-                    .into_iter()
-                    .map(|(_, column)| (self.right.0.name(), column)),
-            )
+            .chain(&mut self.right.0.columns().into_iter())
             .collect::<Vec<_>>()
     }
 
-    fn name(&self) -> Table {
-        format!(
-            "cte_{}_{}",
-            self.left.0.primary_table(),
-            self.right.0.primary_table()
-        )
-    }
-
     fn primary_table(&self) -> Table {
-        self.left.0.name()
+        self.left.0.primary_table()
     }
 
     fn joins(&self) -> Vec<(Table, Column, Column)> {
-        vec![(
-            self.right.0.name(),
+        let mut joins = self.right.0.joins();
+        joins.append(&mut self.left.0.joins());
+        joins.push((
+            self.right.0.primary_table(),
             self.left.1.clone(),
             self.right.1.clone(),
-        )]
+        ));
+
+        joins
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cte::CommonTableExpression;
-
     use super::{Filter, InnerJoin, Select};
 
     #[test]
@@ -209,6 +150,7 @@ mod tests {
             ),
         };
 
+        /*
         let mut ctes = Vec::new();
         join.traverse(&mut ctes);
 
@@ -216,5 +158,6 @@ mod tests {
             println!("# cte_{hash}");
             println!("{cte}\n");
         }
+         */
     }
 }

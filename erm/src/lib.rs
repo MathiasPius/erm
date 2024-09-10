@@ -3,6 +3,7 @@
 mod archetype;
 mod component;
 pub mod cte;
+mod insert;
 mod row;
 
 pub use archetype::Archetype;

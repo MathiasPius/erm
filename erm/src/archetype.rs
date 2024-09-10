@@ -1,17 +1,22 @@
 use std::sync::OnceLock;
 
 use futures::{Stream, StreamExt as _};
-use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments};
+use sqlx::{query::Query, Acquire, ColumnIndex, Database, Executor, IntoArguments, Transaction};
 use tracing::{instrument, span, Instrument, Level};
 
 use crate::{
     cte::{CommonTableExpression, InnerJoin, Select},
+    insert::InsertionQuery,
     row::Rowed,
     Component, OffsetRow,
 };
 
 pub trait Archetype<DB: Database>: Sized {
     fn insert_statement() -> String;
+
+    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q;
 
     fn serialize_components<'q>(
         &'q self,
@@ -43,16 +48,7 @@ pub trait Archetype<DB: Database>: Sized {
             let sql = SQL.get_or_init(|| {
                 let cte = <Self as Archetype<DB>>::select_statement();
 
-                let sql = format!(
-                    "{}\nselect {} from {} where entity = ?",
-                    cte.finalize(),
-                    cte.columns()
-                        .iter()
-                        .map(|(_, column)| format!("{}.{column}", cte.name()))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    cte.name()
-                );
+                let sql = cte.serialize();
                 sql
             });
 
@@ -83,17 +79,7 @@ pub trait Archetype<DB: Database>: Sized {
         let sql = SQL.get_or_init(|| {
             let cte = <Self as Archetype<DB>>::select_statement();
 
-            format!(
-                "{}\nselect {}.entity, {} from {}",
-                cte.finalize(),
-                cte.name(),
-                cte.columns()
-                    .iter()
-                    .map(|(_, column)| format!("{}.{column}", cte.name()))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                cte.name()
-            )
+            cte.serialize()
         });
 
         let query = sqlx::query_as(&sql);
@@ -103,26 +89,65 @@ pub trait Archetype<DB: Database>: Sized {
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
-    #[instrument(name = "insert", skip(self))]
+    /*
     fn insert<'q, 'e, E, Entity>(
         &'q self,
         executor: &'e E,
-        entity: &'q Entity,
-    ) -> impl std::future::Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>>
+        entity: Entity,
+    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>>
     where
         <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
-        &'e E: Executor<'e, Database = DB>,
-        &'q Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug,
+        &'e E: Acquire<'e, Database = DB, Connection = <DB as Database>::Connection>,
+        &'e mut DB::Connection: Executor<'e>,
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
         'q: 'e,
+        <DB as sqlx::Database>::Arguments<'q>: std::fmt::Debug,
     {
+        let mut inserts = InsertionQuery::<'_, DB, Entity> {
+            queries: vec![],
+            entity,
+        };
+
+        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
+
         static SQL: OnceLock<String> = OnceLock::new();
 
-        let sql = SQL.get_or_init(|| <Self as Archetype<DB>>::insert_statement());
+        async move {
+            let mut tx = executor.begin().await.unwrap();
 
-        let query = sqlx::query(sql).bind(entity);
-        let query = self.serialize_components(query);
+            let conn = tx.acquire().await.unwrap();
 
-        executor.execute(query)
+            for insert in inserts.queries {
+                insert.execute(conn).await.unwrap();
+            }
+
+            tx.commit().await
+        }
+    }
+     */
+
+    async fn insert<'e, 'q, Exec, Entity>(&self, executor: Exec, entity: Entity)
+    where
+        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+        Exec: Executor<'e, Database = DB> + Acquire<'e, Database = DB>,
+        Transaction<'e, DB>: Executor<'e, Database = DB>,
+        for<'t> &'t mut <DB as Database>::Connection: Executor<'t, Database = DB>,
+    {
+        let mut inserts = InsertionQuery::<'_, DB, Entity> {
+            queries: vec![],
+            entity,
+        };
+
+        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
+
+        let mut tx = executor.begin().await.unwrap();
+
+        for query in inserts.queries {
+            query.execute(&mut *tx).await.unwrap();
+        }
+
+        tx.commit().await.unwrap()
     }
 }
 
@@ -146,6 +171,13 @@ where
                 .collect::<Vec<_>>()
                 .join(", ")
         )
+    }
+
+    fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + 'q,
+    {
+        <Self as Component<DB>>::insertion_query(&self, query);
     }
 
     fn serialize_components<'q>(
@@ -183,6 +215,19 @@ macro_rules! impl_compound_for_db{
                     $(<$list as Archetype<$db>>::insert_statement()),*
                 ]
                 .join(";\n")
+            }
+
+            fn insertion_query<'q, Entity>(&self, query: &mut InsertionQuery<'q, $db, Entity>)
+            where
+                Entity: sqlx::Encode<'q, $db> + sqlx::Type<$db> + Clone + 'q,
+            {
+                $(
+                    {
+                        #[allow(unused)]
+                        const $list: () = ();
+                        self.${index()}.insertion_query(query);
+                    }
+                )*
             }
 
             fn serialize_components<'q>(
@@ -236,11 +281,11 @@ macro_rules! impl_compound {
 }
 
 impl_compound!(A, B);
-impl_compound!(A, B, C);
-impl_compound!(A, B, C, D);
-impl_compound!(A, B, C, D, E);
-impl_compound!(A, B, C, D, E, F);
-impl_compound!(A, B, C, D, E, F, G);
-impl_compound!(A, B, C, D, E, F, G, H);
-impl_compound!(A, B, C, D, E, F, G, H, I);
-impl_compound!(A, B, C, D, E, F, G, H, I, J);
+// impl_compound!(A, B, C);
+// impl_compound!(A, B, C, D);
+// impl_compound!(A, B, C, D, E);
+// impl_compound!(A, B, C, D, E, F);
+// impl_compound!(A, B, C, D, E, F, G);
+// impl_compound!(A, B, C, D, E, F, G, H);
+// impl_compound!(A, B, C, D, E, F, G, H, I);
+// impl_compound!(A, B, C, D, E, F, G, H, I, J);

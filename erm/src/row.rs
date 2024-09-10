@@ -57,6 +57,7 @@ where
         let mut row = OffsetRow::new(row);
         let entity = row.try_get::<Entity>()?;
         println!("extracted entity!");
+
         Ok(Rowed {
             entity,
             inner: <T as Archetype<<R as Row>::Database>>::deserialize_components(&mut row)?,

@@ -29,7 +29,9 @@ struct PhysicsObject {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let options = SqliteConnectOptions::new().in_memory(true);
+    let options = SqliteConnectOptions::new()
+        .filename("test.sqlite3")
+        .create_if_missing(true);
 
     let db = SqlitePoolOptions::new()
         .min_connections(1)
@@ -59,6 +61,8 @@ async fn main() {
 
     to_insert.insert(&db, &"a").await.unwrap();
     to_insert.insert(&db, &"c").await.unwrap();
+
+    panic!();
 
     info!("listing");
 
