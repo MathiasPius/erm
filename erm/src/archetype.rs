@@ -97,7 +97,7 @@ pub trait Archetype<DB: Database>: Sized {
     where
         Self: Send + Sync,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
-            IntoArguments<'connection, DB> + Send + Sync,
+            IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
