@@ -36,10 +36,11 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
         query.query(Self::INSERT, move |query| self.serialize_fields(query))
     }
 
-    fn create<'e, E>(
+    fn create<'e, E, Entity>(
         executor: &'e E,
     ) -> impl std::future::Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where
+        Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone,
         &'e E: Executor<'e, Database = DB>;
 }
 

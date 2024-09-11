@@ -119,7 +119,6 @@ where
     where
         Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
     {
-        println!("inserting {}", std::any::type_name::<Self>());
         <Self as Component<DB>>::insertion_query(&self, query);
     }
 

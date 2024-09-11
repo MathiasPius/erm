@@ -18,7 +18,7 @@ pub trait CommonTableExpression: 'static {
             .joins()
             .iter()
             .map(|(right, a, b)| {
-                format!("inner join\n      {right}\n    on\n      {left}.{a} == {right}.{b}")
+                format!("    inner join\n      {right}\n    on\n      {left}.{a} == {right}.{b}")
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -38,7 +38,7 @@ pub trait CommonTableExpression: 'static {
         }
 
         format!(
-            "    select\n    {left}.entity,\n    {columns}\n    from\n      {left}{joins}{wheres}"
+            "    select\n      {left}.entity as entity,\n    {columns}\n    from\n      {left}{joins}{wheres}"
         )
     }
 

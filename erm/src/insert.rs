@@ -21,7 +21,6 @@ where
         ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>,
     ) {
         let query = sqlx::query(sql).bind(self.entity.clone());
-        println!("bound first: {:?}", &self.entity);
 
         self.queries.push(f(query));
     }

@@ -4,7 +4,6 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Executor as _,
 };
-use tracing::info;
 
 #[derive(Debug, Component)]
 struct Position {
@@ -27,8 +26,6 @@ struct PhysicsObject {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
-
     let options = SqliteConnectOptions::new()
         //.filename("test.sqlite3")
         .in_memory(true)
@@ -43,8 +40,8 @@ async fn main() {
         .await
         .unwrap();
 
-    Position::create(&db).await.unwrap();
-    Label::create(&db).await.unwrap();
+    Position::create::<_, String>(&db).await.unwrap();
+    Label::create::<_, String>(&db).await.unwrap();
 
     let to_insert = PhysicsObject {
         position: Position {
@@ -61,15 +58,11 @@ async fn main() {
     to_insert.insert(&db, &"a").await;
     to_insert.insert(&db, &"c").await;
 
-    info!("listing");
-
     let mut stream = PhysicsObject::list::<String, _>(&db);
     while let Some(result) = stream.next().await {
         let (entity, obj) = result.unwrap();
         println!("{entity}: {obj:#?}");
     }
-
-    info!("getting");
 
     //println!("{:#?}", PhysicsObject::get(&db, &"c").await.unwrap());
 }
