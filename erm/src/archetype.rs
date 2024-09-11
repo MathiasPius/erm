@@ -106,7 +106,6 @@ pub trait Archetype<DB: Database>: Sized {
 
         <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
 
-        let pool = pool.clone();
         async move {
             let mut tx = pool.begin().await.unwrap();
             for query in inserts.queries {
