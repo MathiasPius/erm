@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{future::Future, sync::OnceLock};
 
 use futures::{Stream, StreamExt as _};
 use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
@@ -32,7 +32,7 @@ pub trait Archetype<DB: Database>: Sized {
     fn get<'a, E, Entity>(
         executor: E,
         entity: &'a Entity,
-    ) -> impl std::future::Future<Output = Result<Self, sqlx::Error>> + Send
+    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
     where
         &'a Entity: sqlx::Encode<'a, DB> + sqlx::Type<DB> + Send + Sync + 'static,
         Entity: for<'r> sqlx::Decode<'r, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
@@ -89,22 +89,32 @@ pub trait Archetype<DB: Database>: Sized {
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
-    async fn insert<'query, Entity>(&'query self, pool: &Pool<DB>, entity: Entity)
+    fn insert<'query, Entity>(
+        &'query self,
+        pool: &'query Pool<DB>,
+        entity: Entity,
+    ) -> impl Future<Output = ()> + Send + 'query
     where
-        <DB as sqlx::Database>::Arguments<'query>: IntoArguments<'query, DB>,
-        for<'a> &'a mut <DB as sqlx::Database>::Connection: Executor<'a, Database = DB>,
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+        Self: Send + Sync,
+        for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
+            IntoArguments<'connection, DB> + Send + Sync,
+        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
+            Executor<'connection, Database = DB>,
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
     {
         let mut inserts = InsertionQuery::<'_, DB, Entity>::new(entity);
 
         <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
 
-        let mut tx = pool.begin().await.unwrap();
-        for query in inserts.queries {
-            query.execute(&mut *tx).await.unwrap();
-        }
+        let pool = pool.clone();
+        async move {
+            let mut tx = pool.begin().await.unwrap();
+            for query in inserts.queries {
+                query.execute(&mut *tx).await.unwrap();
+            }
 
-        tx.commit().await.unwrap();
+            tx.commit().await.unwrap();
+        }
     }
 
     /*
