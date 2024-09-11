@@ -2,6 +2,8 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, TokenStreamExt};
 use syn::{Data, DeriveInput};
 
+mod queries;
+
 #[proc_macro_derive(Component)]
 pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(stream);
@@ -75,12 +77,11 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             }
         });
 
+        let insert = queries::insertion_query(&table, '?', &data);
+
         quote! {
             impl ::erm::Component<::sqlx::#database> for #component_name {
-                fn insertion_query_static() -> &'static ::std::sync::OnceLock<String> {
-                    static SQL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-                    &SQL
-                }
+                const INSERT: &'static str = #insert;
 
                 fn table() -> &'static str {
                     #table
@@ -157,14 +158,6 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let archetype_name = derive.ident;
 
     let implementation = |database: Ident| {
-        let insert_statements = data.fields.iter().map(|field| {
-            let typename = &field.ty;
-
-            quote! {
-                <#typename as ::erm::Archetype<::sqlx::#database>>::insert_statement()
-            }
-        });
-
         let field_names = data.fields.iter().map(|field| {
             let field_name = field.ident.as_ref().unwrap();
             let stringified = field_name.to_string();
@@ -236,13 +229,6 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         quote! {
             impl ::erm::Archetype<::sqlx::#database> for #archetype_name
             {
-                fn insert_statement() -> String {
-                    vec![
-                        #(#insert_statements,)*
-                    ]
-                    .join(";\n")
-                }
-
                 fn insertion_query<'q, Entity>(&'q self, query: &mut ::erm::InsertionQuery<'q, ::sqlx::#database, Entity>)
                 where
                     Entity: sqlx::Encode<'q, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + std::fmt::Debug + Clone + 'q

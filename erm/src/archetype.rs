@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use futures::{Stream, StreamExt as _};
-use sqlx::{query::Query, Acquire, ColumnIndex, Database, Executor, IntoArguments, Transaction};
+use sqlx::{query::Query, Acquire, ColumnIndex, Database, Executor, IntoArguments};
 use tracing::{instrument, span, Instrument, Level};
 
 use crate::{
@@ -12,8 +12,6 @@ use crate::{
 };
 
 pub trait Archetype<DB: Database>: Sized {
-    fn insert_statement() -> String;
-
     fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
     where
         Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + std::fmt::Debug + 'q;
@@ -91,43 +89,6 @@ pub trait Archetype<DB: Database>: Sized {
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
-    /*
-    fn insert<'q, 'e, E, Entity>(
-        &'q self,
-        executor: &'e E,
-        entity: Entity,
-    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>>
-    where
-        <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
-        &'e E: Acquire<'e, Database = DB, Connection = <DB as Database>::Connection>,
-        &'e mut DB::Connection: Executor<'e>,
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
-        'q: 'e,
-        <DB as sqlx::Database>::Arguments<'q>: std::fmt::Debug,
-    {
-        let mut inserts = InsertionQuery::<'_, DB, Entity> {
-            queries: vec![],
-            entity,
-        };
-
-        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
-
-        static SQL: OnceLock<String> = OnceLock::new();
-
-        async move {
-            let mut tx = executor.begin().await.unwrap();
-
-            let conn = tx.acquire().await.unwrap();
-
-            for insert in inserts.queries {
-                insert.execute(conn).await.unwrap();
-            }
-
-            tx.commit().await
-        }
-    }
-     */
-
     async fn insert<'executor, 'transaction, 'connection, 'query, Exec, Entity>(
         &'query self,
         executor: &'executor Exec,
@@ -154,24 +115,6 @@ impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
 {
-    fn insert_statement() -> String {
-        let table = <T as Component<DB>>::table();
-        let columns: Vec<_> = <T as Component<DB>>::columns()
-            .into_iter()
-            .map(|def| def.name())
-            .collect();
-
-        format!(
-            "insert into {}(entity, {}) values(?1, {})",
-            table,
-            columns.join(", "),
-            std::iter::repeat("?")
-                .take(columns.len())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    }
-
     fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
     where
         Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
@@ -210,13 +153,6 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn insert_statement() -> String {
-                vec![
-                    $(<$list as Archetype<$db>>::insert_statement()),*
-                ]
-                .join(";\n")
-            }
-
             fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, $db, Entity>)
             where
                 Entity: sqlx::Encode<'q, $db> + sqlx::Type<$db> + std::fmt::Debug + Clone + 'q,

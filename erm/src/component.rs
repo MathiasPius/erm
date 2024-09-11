@@ -1,5 +1,3 @@
-use std::{marker::PhantomData, sync::OnceLock};
-
 use sqlx::{query::Query, Database, Executor};
 
 use crate::{insert::InsertionQuery, OffsetRow};
@@ -21,7 +19,8 @@ impl<DB: Database> ColumnDefinition<DB> {
 
 /// Describes reading and writing from a Component-specific Table.
 pub trait Component<DB: Database>: std::fmt::Debug + Sized {
-    fn insertion_query_static() -> &'static OnceLock<String>;
+    const INSERT: &'static str;
+
     fn table() -> &'static str;
     fn columns() -> Vec<ColumnDefinition<DB>>;
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
@@ -34,34 +33,7 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
     where
         Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
     {
-        let sql = Self::insertion_query_static();
-
-        let table = Self::table();
-
-        let entity = ColumnDefinition {
-            name: "entity",
-            type_info: <&Entity as sqlx::Type<DB>>::type_info(),
-        };
-
-        let columns = [entity]
-            .iter()
-            .chain(Self::columns().iter())
-            .map(|column| column.name())
-            .collect::<Vec<_>>();
-
-        let bindings = std::iter::repeat("?")
-            .take(columns.len())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let columns = columns.join(", ");
-
-        let sql = sql.get_or_init(|| format!("insert into {table}({columns}) values({bindings})"));
-
-        println!("{sql}");
-        println!("{self:#?}");
-
-        query.query(sql, move |query| self.serialize_fields(query))
+        query.query(Self::INSERT, move |query| self.serialize_fields(query))
     }
 
     fn create<'e, E>(

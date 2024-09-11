@@ -30,7 +30,8 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let options = SqliteConnectOptions::new()
-        .filename("test.sqlite3")
+        //.filename("test.sqlite3")
+        .in_memory(true)
         .create_if_missing(true);
 
     let db = SqlitePoolOptions::new()
@@ -62,7 +63,8 @@ async fn main() {
 
     info!("listing");
 
-    while let Some(result) = PhysicsObject::list::<String, _>(&db).next().await {
+    let mut stream = PhysicsObject::list::<String, _>(&db);
+    while let Some(result) = stream.next().await {
         let (entity, obj) = result.unwrap();
         println!("{entity}: {obj:#?}");
     }
