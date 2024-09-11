@@ -1,8 +1,11 @@
 use proc_macro2::{Ident, TokenStream};
+use queries::{insert_archetype, select_query};
 use quote::{quote, TokenStreamExt};
+use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
 
 mod queries;
+mod serde;
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -17,94 +20,41 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let table = component_name.to_string().to_lowercase();
 
     let implementation = |database: Ident| {
+        let database = quote! {::sqlx::#database};
+
         let columns = data.fields.iter().map(|field| {
             let name = field.ident.as_ref().unwrap().to_string();
             let typename = &field.ty;
 
             quote! {
-                ::erm::ColumnDefinition::<::sqlx::#database> {
+                ::erm::ColumnDefinition::<#database> {
                     name: #name,
-                    type_info: <#typename as ::sqlx::Type<::sqlx::#database>>::type_info(),
+                    type_info: <#typename as ::sqlx::Type<#database>>::type_info(),
                 }
             }
         });
 
-        let unpack = data.fields.iter().map(|field| {
-            let name = field.ident.as_ref().unwrap();
-            let typename = &field.ty;
+        let deserialize_fields = deserialize_fields(&database, &component_name, &data.fields);
+        let serialize_fields = serialize_fields(&database, &data.fields);
 
-            quote! {
-                let #name = row.try_get::<#typename>();
-            }
-        });
-
-        let repack = data.fields.iter().map(|field| {
-            let name = field.ident.as_ref().unwrap();
-
-            quote! {
-                #name: #name?
-            }
-        });
-
-        let binds = data.fields.iter().map(|field| {
-            let name = field.ident.as_ref().unwrap();
-
-            quote! {
-                let query = query.bind(&self.#name);
-            }
-        });
-
-        let insert = queries::insertion_query(&table, '?', &data);
-        let create = queries::create_query(&database, &table, &data);
+        let insert = queries::insert_component(&table, '?', &data);
+        let create_table = queries::create_table(&database, &table, &data);
 
         quote! {
-            impl ::erm::Component<::sqlx::#database> for #component_name {
+            impl ::erm::Component<#database> for #component_name {
                 const INSERT: &'static str = #insert;
 
                 fn table() -> &'static str {
                     #table
                 }
 
-                fn columns() -> Vec<::erm::ColumnDefinition::<::sqlx::#database>> {
+                fn columns() -> Vec<::erm::ColumnDefinition::<#database>> {
                     vec![#(#columns,)*]
                 }
 
-                fn deserialize_fields(row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {
-                    #(#unpack;)*
-
-                    let component = #component_name {
-                        #(#repack,)*
-                    };
-
-                    Ok(component)
-                }
-
-                fn serialize_fields<'q>(
-                    &'q self,
-                    query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
-                ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
-                    #(#binds)*
-
-                    query
-                }
-
-                fn create<'e, E, Entity>(
-                    executor: &'e E,
-                ) -> impl ::core::future::Future<Output = Result<<::sqlx::#database as ::sqlx::Database>::QueryResult, ::sqlx::Error>> + Send
-                where
-                    Entity: for<'q> sqlx::Encode<'q, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + std::fmt::Debug + Clone,
-                    &'e E: ::sqlx::Executor<'e, Database = ::sqlx::#database>
-                {
-                    use ::sqlx::TypeInfo as _;
-
-                    static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
-                    let sql = SQL.get_or_init(||
-                        #create
-                    ).as_str();
-
-                    executor.execute(sql)
-                }
-
+                #create_table
+                #deserialize_fields
+                #serialize_fields
             }
         }
     };
@@ -137,112 +87,25 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let archetype_name = derive.ident;
 
     let implementation = |database: Ident| {
-        let field_names = data.fields.iter().map(|field| {
-            let field_name = field.ident.as_ref().unwrap();
-            quote! {
-                let query = self.#field_name.serialize_components(query);
-            }
-        });
+        let database = quote! {::sqlx::#database};
 
-        let mut field_iter = data.fields.iter();
+        let select_query = select_query(&database, &data.fields);
 
-        let first_item = &field_iter.next().unwrap().ty;
-        let first = quote! {
-            let join = <#first_item as Archetype<::sqlx::#database>>::select_statement();
-        };
+        let serialize_components = serialize_components(&database, &data.fields);
 
-        let select_statements = field_iter.map(|field| {
-            let field = &field.ty;
+        let deserialize_components =
+            deserialize_components(&archetype_name, &database, &data.fields);
 
-            quote! {
-                let join = ::erm::cte::InnerJoin {
-                    left: (
-                        Box::new(join),
-                        "entity".to_string(),
-                    ),
-                    right: (
-                        Box::new(<#field as Archetype<::sqlx::#database>>::select_statement()),
-                        "entity".to_string(),
-                    ),
-                }
-            }
-        });
-
-        let unpack: Vec<_> = data
-            .fields
-            .iter()
-            .map(|field| {
-                let name = field.ident.as_ref().unwrap();
-                let typename = &field.ty;
-
-                quote! {
-                    let #name = <#typename as ::erm::Archetype<::sqlx::#database>>::deserialize_components(row);
-                }
-            })
-            .collect();
-
-        let repack: Vec<_> = data
-            .fields
-            .iter()
-            .map(|field| {
-                let name = field.ident.as_ref().unwrap();
-
-                quote! {
-                    #name: #name?
-                }
-            })
-            .collect();
-
-        let insertion_queries = data.fields.iter().map(|field| {
-            let name = field.ident.as_ref().unwrap();
-            let typename = &field.ty;
-
-            quote! {
-                <#typename as ::erm::Archetype<::sqlx::#database>>::insertion_query(&self.#name, query);
-            }
-        });
+        let insert_archetype = insert_archetype(&database, &data.fields);
 
         quote! {
-            impl ::erm::Archetype<::sqlx::#database> for #archetype_name
+            impl ::erm::Archetype<#database> for #archetype_name
             {
-                fn insertion_query<'query, Entity>(&'query self, query: &mut ::erm::InsertionQuery<'query, ::sqlx::#database, Entity>)
-                where
-                    Entity: sqlx::Encode<'query, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + Clone + 'query
-                {
-                    #(#insertion_queries)*
-                }
+                #insert_archetype
+                #select_query
 
-                fn serialize_components<'q>(
-                    &'q self,
-                    query: ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>>,
-                ) -> ::sqlx::query::Query<'q, ::sqlx::#database, <::sqlx::#database as ::sqlx::Database>::Arguments<'q>> {
-                    #[cfg(feature = "tracing")]
-                    ::tracing::trace!("serializing archetype {}", ::std::any::type_name::<Self>());
-
-                    #(#field_names)*
-
-                    query
-                }
-
-                fn select_statement() -> impl ::erm::cte::CommonTableExpression {
-                    #first;
-                    #(#select_statements;)*
-
-                    join
-                }
-
-                fn deserialize_components(
-                    row: &mut ::erm::OffsetRow<<::sqlx::#database as ::sqlx::Database>::Row>,
-                ) -> Result<Self, ::sqlx::Error> {
-                    #[cfg(feature = "tracing")]
-                    ::tracing::trace!("deserializing archetype {}", ::std::any::type_name::<Self>());
-
-                    #(#unpack;)*
-
-                    Ok(#archetype_name {
-                        #(#repack,)*
-                    })
-                }
+                #deserialize_components
+                #serialize_components
             }
         }
     };

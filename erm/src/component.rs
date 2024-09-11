@@ -1,4 +1,6 @@
-use sqlx::{query::Query, Database, Executor};
+use std::future::Future;
+
+use sqlx::{query::Query, Database, Pool};
 
 use crate::{insert::InsertionQuery, OffsetRow};
 
@@ -22,8 +24,11 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
     const INSERT: &'static str;
 
     fn table() -> &'static str;
+
     fn columns() -> Vec<ColumnDefinition<DB>>;
+
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
+
     fn serialize_fields<'query>(
         &'query self,
         query: Query<'query, DB, <DB as Database>::Arguments<'query>>,
@@ -38,12 +43,11 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
         query.query(Self::INSERT, move |query| self.serialize_fields(query))
     }
 
-    fn create<'e, E, Entity>(
-        executor: &'e E,
-    ) -> impl std::future::Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
+    fn create_table<'pool, Entity>(
+        pool: &'pool Pool<DB>,
+    ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where
-        Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone,
-        &'e E: Executor<'e, Database = DB>;
+        Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone;
 }
 
 #[cfg(test)]

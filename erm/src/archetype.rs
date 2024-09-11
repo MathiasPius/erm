@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub trait Archetype<DB: Database>: Sized {
-    fn insertion_query<'query, Entity>(
+    fn insert_archetype<'query, Entity>(
         &'query self,
         query: &mut InsertionQuery<'query, DB, Entity>,
     ) where
@@ -104,7 +104,7 @@ pub trait Archetype<DB: Database>: Sized {
     {
         let mut inserts = InsertionQuery::<'_, DB, Entity>::new(entity);
 
-        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
+        <Self as Archetype<DB>>::insert_archetype(&self, &mut inserts);
 
         async move {
             let mut tx = pool.begin().await.unwrap();
@@ -115,38 +115,16 @@ pub trait Archetype<DB: Database>: Sized {
             tx.commit().await.unwrap();
         }
     }
-
-    /*
-    async fn insert<'acquire, Entity>(&self, pool: Pool<DB>, entity: Entity)
-    where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'query,
-        <DB as sqlx::Database>::Arguments<'query>: IntoArguments<'query, DB>,
-        &'executor Exec: Executor<'query, Database = DB> + Acquire<'acquire, Database = DB>,
-        for<'e> &'e mut <DB as sqlx::Database>::Connection: Executor<'query, Database = DB>,
-        &'acquire mut Transaction<'query, DB>: Executor<'query, Database = DB>,
-    {
-        let mut inserts = InsertionQuery::<'_, DB, Entity> {
-            queries: vec![],
-            entity,
-        };
-
-        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
-
-        let mut tx = executor.begin().await.unwrap();
-        for query in inserts.queries {
-            query.execute(&mut tx).await.unwrap();
-        }
-
-        tx.commit().await.unwrap();
-    } */
 }
 
 impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
 {
-    fn insertion_query<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, DB, Entity>)
-    where
+    fn insert_archetype<'query, Entity>(
+        &'query self,
+        query: &mut InsertionQuery<'query, DB, Entity>,
+    ) where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         <Self as Component<DB>>::insert_component(&self, query);
@@ -182,7 +160,7 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn insertion_query<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, $db, Entity>)
+            fn insert_archetype<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, $db, Entity>)
             where
                 Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
             {
@@ -190,7 +168,7 @@ macro_rules! impl_compound_for_db{
                     {
                         #[allow(unused)]
                         const $list: () = ();
-                        self.${index()}.insertion_query(query);
+                        self.${index()}.insert_archetype(query);
                     }
                 )*
             }
