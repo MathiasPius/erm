@@ -8,17 +8,24 @@ where
     pub entity: Entity,
 }
 
-impl<'q, DB, Entity> InsertionQuery<'q, DB, Entity>
+impl<'query, DB, Entity> InsertionQuery<'query, DB, Entity>
 where
     DB: Database,
-    Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + std::fmt::Debug + 'q,
+    Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
 {
+    pub fn new(entity: Entity) -> Self {
+        InsertionQuery {
+            queries: Vec::new(),
+            entity,
+        }
+    }
+
     pub fn query(
         &mut self,
         sql: &'static str,
         f: impl Fn(
-            Query<'q, DB, <DB as Database>::Arguments<'q>>,
-        ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>,
+            Query<'query, DB, <DB as Database>::Arguments<'query>>,
+        ) -> Query<'query, DB, <DB as Database>::Arguments<'query>>,
     ) {
         let query = sqlx::query(sql).bind(self.entity.clone());
 

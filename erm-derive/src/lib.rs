@@ -205,9 +205,9 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         quote! {
             impl ::erm::Archetype<::sqlx::#database> for #archetype_name
             {
-                fn insertion_query<'q, Entity>(&'q self, query: &mut ::erm::InsertionQuery<'q, ::sqlx::#database, Entity>)
+                fn insertion_query<'query, Entity>(&'query self, query: &mut ::erm::InsertionQuery<'query, ::sqlx::#database, Entity>)
                 where
-                    Entity: sqlx::Encode<'q, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + std::fmt::Debug + Clone + 'q
+                    Entity: sqlx::Encode<'query, ::sqlx::#database> + sqlx::Type<::sqlx::#database> + Clone + 'query
                 {
                     #(#insertion_queries)*
                 }

@@ -24,14 +24,16 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
     fn table() -> &'static str;
     fn columns() -> Vec<ColumnDefinition<DB>>;
     fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
-    fn serialize_fields<'q>(
-        &'q self,
-        query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
-    ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
+    fn serialize_fields<'query>(
+        &'query self,
+        query: Query<'query, DB, <DB as Database>::Arguments<'query>>,
+    ) -> Query<'query, DB, <DB as Database>::Arguments<'query>>;
 
-    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
+    fn insert_component<'query, Entity>(
+        &'query self,
+        query: &mut InsertionQuery<'query, DB, Entity>,
+    ) where
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         query.query(Self::INSERT, move |query| self.serialize_fields(query))
     }

@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use futures::{Stream, StreamExt as _};
-use sqlx::{query::Query, Acquire, ColumnIndex, Database, Executor, IntoArguments};
+use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
 use tracing::{instrument, span, Instrument, Level};
 
 use crate::{
@@ -12,9 +12,11 @@ use crate::{
 };
 
 pub trait Archetype<DB: Database>: Sized {
-    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone + std::fmt::Debug + 'q;
+    fn insertion_query<'query, Entity>(
+        &'query self,
+        query: &mut InsertionQuery<'query, DB, Entity>,
+    ) where
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 
     fn serialize_components<'q>(
         &'q self,
@@ -87,14 +89,32 @@ pub trait Archetype<DB: Database>: Sized {
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
-    async fn insert<'executor, 'transaction, 'connection, 'query, Exec, Entity>(
-        &'query self,
-        executor: &'executor Exec,
-        entity: Entity,
-    ) where
+    async fn insert<'query, Entity>(&'query self, pool: &Pool<DB>, entity: Entity)
+    where
         <DB as sqlx::Database>::Arguments<'query>: IntoArguments<'query, DB>,
+        for<'a> &'a mut <DB as sqlx::Database>::Connection: Executor<'a, Database = DB>,
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+    {
+        let mut inserts = InsertionQuery::<'_, DB, Entity>::new(entity);
+
+        <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
+
+        let mut tx = pool.begin().await.unwrap();
+        for query in inserts.queries {
+            query.execute(&mut *tx).await.unwrap();
+        }
+
+        tx.commit().await.unwrap();
+    }
+
+    /*
+    async fn insert<'acquire, Entity>(&self, pool: Pool<DB>, entity: Entity)
+    where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'query,
-        &'executor Exec: Executor<'executor, Database = DB> + Acquire<'connection, Database = DB>,
+        <DB as sqlx::Database>::Arguments<'query>: IntoArguments<'query, DB>,
+        &'executor Exec: Executor<'query, Database = DB> + Acquire<'acquire, Database = DB>,
+        for<'e> &'e mut <DB as sqlx::Database>::Connection: Executor<'query, Database = DB>,
+        &'acquire mut Transaction<'query, DB>: Executor<'query, Database = DB>,
     {
         let mut inserts = InsertionQuery::<'_, DB, Entity> {
             queries: vec![],
@@ -103,21 +123,24 @@ pub trait Archetype<DB: Database>: Sized {
 
         <Self as Archetype<DB>>::insertion_query(&self, &mut inserts);
 
+        let mut tx = executor.begin().await.unwrap();
         for query in inserts.queries {
-            query.execute(executor).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
         }
-    }
+
+        tx.commit().await.unwrap();
+    } */
 }
 
 impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
 {
-    fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, DB, Entity>)
+    fn insertion_query<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, DB, Entity>)
     where
-        Entity: sqlx::Encode<'q, DB> + sqlx::Type<DB> + std::fmt::Debug + Clone + 'q,
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
-        <Self as Component<DB>>::insertion_query(&self, query);
+        <Self as Component<DB>>::insert_component(&self, query);
     }
 
     fn serialize_components<'q>(
@@ -150,9 +173,9 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn insertion_query<'q, Entity>(&'q self, query: &mut InsertionQuery<'q, $db, Entity>)
+            fn insertion_query<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, $db, Entity>)
             where
-                Entity: sqlx::Encode<'q, $db> + sqlx::Type<$db> + std::fmt::Debug + Clone + 'q,
+                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
             {
                 $(
                     {
