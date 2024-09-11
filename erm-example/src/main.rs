@@ -1,9 +1,6 @@
 use erm::{Archetype, Component};
 use futures::StreamExt as _;
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    Executor as _,
-};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 #[derive(Debug, Component)]
 struct Position {
@@ -40,8 +37,8 @@ async fn main() {
         .await
         .unwrap();
 
-    Position::create::<_, String>(&db).await.unwrap();
-    Label::create::<_, String>(&db).await.unwrap();
+    Position::create_table::<String>(&db).await.unwrap();
+    Label::create_table::<String>(&db).await.unwrap();
 
     let to_insert = PhysicsObject {
         position: Position {
