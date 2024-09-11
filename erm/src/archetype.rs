@@ -71,8 +71,6 @@ pub trait Archetype<DB: Database>: Sized {
         Self: Unpin + Send + Sync + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
-        println!("constructing list stream");
-
         static SQL: OnceLock<String> = OnceLock::new();
         let sql = SQL.get_or_init(|| {
             let cte = <Self as Archetype<DB>>::select_statement();

@@ -22,11 +22,11 @@ fn type_info<'database, 'field>(
 }
 
 /// Generates placeholder values corresponding to the number of columns.
-fn placeholders(character: char, iter: impl Iterator) -> String {
+fn placeholders(character: char, count: usize) -> String {
     std::iter::repeat(character)
         .enumerate()
         .skip(1)
-        .take(iter.count())
+        .take(count)
         .map(|(i, character)| format!("{character}{i}"))
         .collect::<Vec<_>>()
         .join(", ")
@@ -35,10 +35,10 @@ fn placeholders(character: char, iter: impl Iterator) -> String {
 pub fn insertion_query(table: &str, character: char, data: &DataStruct) -> String {
     let column_names = data.fields.iter().map(names).collect::<Vec<_>>();
 
-    let placeholders = placeholders(character, column_names.iter());
+    let placeholders = placeholders(character, column_names.len() + 1);
 
     format!(
-        "insert into {table}({column_names}) values({placeholders});",
+        "insert into {table}(entity, {column_names}) values({placeholders});",
         column_names = column_names.join(", ")
     )
 }

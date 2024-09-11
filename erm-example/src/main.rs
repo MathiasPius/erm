@@ -27,8 +27,8 @@ struct PhysicsObject {
 #[tokio::main]
 async fn main() {
     let options = SqliteConnectOptions::new()
-        //.filename("test.sqlite3")
-        .in_memory(true)
+        .filename("test.sqlite3")
+        //.in_memory(true)
         .create_if_missing(true);
 
     let db = SqlitePoolOptions::new()
