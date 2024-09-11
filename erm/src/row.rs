@@ -56,7 +56,6 @@ where
         trace!("parsing row with columns {:?}", row.columns());
         let mut row = OffsetRow::new(row);
         let entity = row.try_get::<Entity>()?;
-        println!("extracted entity!");
 
         Ok(Rowed {
             entity,

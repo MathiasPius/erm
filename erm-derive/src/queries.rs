@@ -63,7 +63,11 @@ pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
     }
 }
 
-pub fn create_table(database: &TokenStream, table: &str, data: &DataStruct) -> TokenStream {
+pub fn create_component_table(
+    database: &TokenStream,
+    table: &str,
+    data: &DataStruct,
+) -> TokenStream {
     let columns = data.fields.iter().map(names);
 
     let type_info = data.fields.iter().map(type_info(database));
@@ -84,7 +88,7 @@ pub fn create_table(database: &TokenStream, table: &str, data: &DataStruct) -> T
     };
 
     quote! {
-        fn create_table<'pool, Entity>(
+        fn create_component_table<'pool, Entity>(
             pool: &'pool ::sqlx::Pool<#database>,
         ) -> impl ::core::future::Future<Output = Result<<#database as ::sqlx::Database>::QueryResult, ::sqlx::Error>> + Send
         where

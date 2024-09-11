@@ -38,7 +38,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let serialize_fields = serialize_fields(&database, &data.fields);
 
         let insert = queries::insert_component(&table, '?', &data);
-        let create_table = queries::create_table(&database, &table, &data);
+        let create_component_table = queries::create_component_table(&database, &table, &data);
 
         quote! {
             impl ::erm::Component<#database> for #component_name {
@@ -52,7 +52,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     vec![#(#columns,)*]
                 }
 
-                #create_table
+                #create_component_table
                 #deserialize_fields
                 #serialize_fields
             }

@@ -80,8 +80,6 @@ pub trait Archetype<DB: Database>: Sized {
             cte.serialize()
         });
 
-        println!("{sql}");
-
         let query = sqlx::query_as(&sql);
 
         query
@@ -224,11 +222,11 @@ macro_rules! impl_compound {
 }
 
 impl_compound!(A, B);
-// impl_compound!(A, B, C);
-// impl_compound!(A, B, C, D);
-// impl_compound!(A, B, C, D, E);
-// impl_compound!(A, B, C, D, E, F);
-// impl_compound!(A, B, C, D, E, F, G);
-// impl_compound!(A, B, C, D, E, F, G, H);
-// impl_compound!(A, B, C, D, E, F, G, H, I);
-// impl_compound!(A, B, C, D, E, F, G, H, I, J);
+impl_compound!(A, B, C);
+impl_compound!(A, B, C, D);
+impl_compound!(A, B, C, D, E);
+impl_compound!(A, B, C, D, E, F);
+impl_compound!(A, B, C, D, E, F, G);
+impl_compound!(A, B, C, D, E, F, G, H);
+impl_compound!(A, B, C, D, E, F, G, H, I);
+impl_compound!(A, B, C, D, E, F, G, H, I, J);

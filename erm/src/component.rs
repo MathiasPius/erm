@@ -43,7 +43,7 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
         query.query(Self::INSERT, move |query| self.serialize_fields(query))
     }
 
-    fn create_table<'pool, Entity>(
+    fn create_component_table<'pool, Entity>(
         pool: &'pool Pool<DB>,
     ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where

@@ -37,8 +37,10 @@ async fn main() {
         .await
         .unwrap();
 
-    Position::create_table::<String>(&db).await.unwrap();
-    Label::create_table::<String>(&db).await.unwrap();
+    Position::create_component_table::<String>(&db)
+        .await
+        .unwrap();
+    Label::create_component_table::<String>(&db).await.unwrap();
 
     let to_insert = PhysicsObject {
         position: Position {
