@@ -51,7 +51,6 @@ pub fn get_impl(database: &TokenStream) -> TokenStream {
             static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
 
             let query = &SQL.get_or_init(|| <Self as ::erm::Archetype<#database>>::get_statement().serialize());
-            println!("{query}");
 
             ::sqlx::query_as(query)
                 .bind(entity)
