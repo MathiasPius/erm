@@ -2,20 +2,20 @@ use erm::{Archetype, Component};
 use futures::StreamExt as _;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
-#[derive(Debug, Component)]
+#[derive(Debug, Component, PartialEq, Eq)]
 struct Position {
-    name: String,
+    posname: String,
     x: u32,
     y: u32,
 }
 
-#[derive(Debug, Component)]
+#[derive(Debug, Component, PartialEq, Eq)]
 struct Label {
     label: String,
     label2: String,
 }
 
-#[derive(Debug, Archetype)]
+#[derive(Debug, Archetype, PartialEq, Eq)]
 struct PhysicsObject {
     pub label: Label,
     pub position: Position,
@@ -44,7 +44,7 @@ async fn main() {
 
     let to_insert = PhysicsObject {
         position: Position {
-            name: "lol?".to_string(),
+            posname: "lol?".to_string(),
             x: 111,
             y: 222,
         },
@@ -59,7 +59,7 @@ async fn main() {
 
     let replacement = PhysicsObject {
         position: Position {
-            name: "lmao?".to_string(),
+            posname: "lmao?".to_string(),
             x: 333,
             y: 444,
         },
@@ -70,6 +70,10 @@ async fn main() {
     };
 
     replacement.update(&db, "a").await;
+
+    let entity = "a".to_string();
+
+    assert_eq!(replacement, PhysicsObject::get(&db, &entity).await.unwrap());
 
     let mut stream = PhysicsObject::list::<String>(&db);
     while let Some(result) = stream.next().await {

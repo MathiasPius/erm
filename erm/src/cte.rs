@@ -34,7 +34,7 @@ pub trait CommonTableExpression: 'static {
             .collect::<Vec<_>>()
             .join("\n      and ");
         if !wheres.is_empty() {
-            wheres = format!("\n    where\n  {wheres}");
+            wheres = format!("\n    where\n      {wheres}");
         }
 
         format!(
@@ -91,6 +91,10 @@ impl CommonTableExpression for Filter {
         let mut wheres = self.inner.wheres();
         wheres.push((self.primary_table(), self.clause.clone()));
         wheres
+    }
+
+    fn joins(&self) -> Vec<(Table, Column, Column)> {
+        self.inner.joins()
     }
 }
 

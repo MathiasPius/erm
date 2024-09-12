@@ -1,8 +1,7 @@
 use std::{future::Future, sync::OnceLock};
 
-use futures::{Stream, StreamExt as _};
+use futures::{FutureExt, Stream, StreamExt as _};
 use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
-use tracing::{span, Instrument, Level};
 
 use crate::{
     cte::{CommonTableExpression, Filter, InnerJoin, Select},
@@ -34,7 +33,7 @@ pub trait Archetype<DB: Database>: Sized {
     }
 
     fn list<'pool, Entity>(
-        executor: &'pool Pool<DB>,
+        pool: &'pool Pool<DB>,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
         Self: Unpin + Send + Sync + 'static,
@@ -45,38 +44,20 @@ pub trait Archetype<DB: Database>: Sized {
         Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>;
 
-    fn get<'a, E, Entity>(
-        executor: E,
-        entity: &'a Entity,
-    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
+    fn get<'pool, 'entity, Entity>(
+        pool: &'pool Pool<DB>,
+        entity: &'entity Entity,
+    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
     where
-        &'a Entity: sqlx::Encode<'a, DB> + sqlx::Type<DB> + Send + Sync + 'static,
-        Entity: for<'r> sqlx::Decode<'r, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
-        for<'q> <DB as sqlx::Database>::Arguments<'q>: IntoArguments<'q, DB>,
-        E: for<'e> Executor<'e, Database = DB> + Send + Sync,
-        Self: Unpin + Send + Sync,
+        Self: Unpin + Send + Sync + 'static,
+        for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
+            IntoArguments<'connection, DB> + Send,
+        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
+            Executor<'connection, Database = DB>,
+        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'entity,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
-    {
-        let span = span!(Level::TRACE, "get");
-
-        async move {
-            static SQL: OnceLock<String> = OnceLock::new();
-            let sql = SQL.get_or_init(|| {
-                let cte = <Self as Archetype<DB>>::get_statement();
-
-                let sql = cte.serialize();
-                sql
-            });
-
-            let result: Rowed<Entity, Self> = sqlx::query_as(&sql)
-                .bind(entity)
-                .fetch_one(executor)
-                .await?;
-
-            Ok(result.inner)
-        }
-        .instrument(span)
-    }
+        'pool: 'entity;
 
     fn insert<'query, Entity>(
         &'query self,
@@ -175,7 +156,7 @@ where
     }
 
     fn list<'pool, Entity>(
-        executor: &'pool Pool<DB>,
+        pool: &'pool Pool<DB>,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
         Self: Unpin + Send + Sync + 'static,
@@ -193,8 +174,31 @@ where
         );
 
         query
-            .fetch(executor)
+            .fetch(pool)
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
+    }
+
+    fn get<'pool, 'entity, Entity>(
+        pool: &'pool Pool<DB>,
+        entity: &'entity Entity,
+    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
+    where
+        Self: Unpin + Send + Sync + 'static,
+        for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
+            IntoArguments<'connection, DB> + Send,
+        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
+            Executor<'connection, Database = DB>,
+        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'entity,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
+        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
+        'pool: 'entity,
+    {
+        static SQL: OnceLock<String> = OnceLock::new();
+
+        sqlx::query_as(&SQL.get_or_init(|| <Self as Archetype<DB>>::get_statement().serialize()))
+            .bind(entity)
+            .fetch_one(pool)
+            .map(move |row| row.map(|result: Rowed<Entity, Self>| result.inner))
     }
 
     fn serialize_components<'q>(
@@ -277,6 +281,29 @@ macro_rules! impl_compound_for_db{
                 query
                     .fetch(executor)
                     .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
+            }
+
+            fn get<'pool, 'entity, Entity>(
+                pool: &'pool Pool<$db>,
+                entity: &'entity Entity,
+            ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
+            where
+                Self: Unpin + Send + Sync + 'static,
+                for<'connection> <$db as sqlx::Database>::Arguments<'connection>:
+                    IntoArguments<'connection, $db> + Send,
+                for<'connection> &'connection mut <$db as sqlx::Database>::Connection:
+                    Executor<'connection, Database = $db>,
+                &'entity Entity: sqlx::Encode<'entity, $db> + sqlx::Type<$db> + Unpin + Send + Sync + 'entity,
+                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + Sync + 'static,
+                usize: ColumnIndex<<$db as sqlx::Database>::Row>,
+                'pool: 'entity,
+            {
+                static SQL: OnceLock<String> = OnceLock::new();
+
+                sqlx::query_as(&SQL.get_or_init(|| <Self as Archetype<$db>>::get_statement().serialize()))
+                    .bind(entity)
+                    .fetch_one(pool)
+                    .map(move |row| row.map(|result: Rowed<Entity, Self>| result.inner))
             }
 
             fn serialize_components<'q>(

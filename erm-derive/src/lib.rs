@@ -1,4 +1,4 @@
-use api::list_impl;
+use api::{get_impl, list_impl};
 use proc_macro2::{Ident, TokenStream};
 use queries::{insert_archetype, select_query, update_archetype};
 use quote::{quote, TokenStreamExt};
@@ -104,6 +104,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let update_archetype = update_archetype(&database, &data.fields);
 
         let list_impl = list_impl(&database);
+        let get_impl = get_impl(&database);
 
         quote! {
             impl ::erm::Archetype<#database> for #archetype_name
@@ -114,6 +115,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                 #select_query
 
                 #list_impl
+                #get_impl
 
                 #deserialize_components
                 #serialize_components
