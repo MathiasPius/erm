@@ -1,9 +1,11 @@
+use api::list_impl;
 use proc_macro2::{Ident, TokenStream};
-use queries::{insert_archetype, select_query};
+use queries::{insert_archetype, select_query, update_archetype};
 use quote::{quote, TokenStreamExt};
 use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
 
+mod api;
 mod queries;
 mod serde;
 
@@ -37,14 +39,14 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let deserialize_fields = deserialize_fields(&database, &component_name, &data.fields);
         let serialize_fields = serialize_fields(&database, &data.fields);
 
-        let insert = queries::insert_component(&table, '?', &data);
-        let update = queries::update_component(&table, '?', &data);
+        let insert_component = queries::insert_component(&table, '?', &data);
+        let update_component = queries::update_component(&table, '?', &data);
         let create_component_table = queries::create_component_table(&database, &table, &data);
 
         quote! {
             impl ::erm::Component<#database> for #component_name {
-                const INSERT: &'static str = #insert;
-                const UPDATE: &'static str = #update;
+                const INSERT: &'static str = #insert_component;
+                const UPDATE: &'static str = #update_component;
 
                 fn table() -> &'static str {
                     #table
@@ -99,12 +101,19 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             deserialize_components(&archetype_name, &database, &data.fields);
 
         let insert_archetype = insert_archetype(&database, &data.fields);
+        let update_archetype = update_archetype(&database, &data.fields);
+
+        let list_impl = list_impl(&database);
 
         quote! {
             impl ::erm::Archetype<#database> for #archetype_name
             {
                 #insert_archetype
+                #update_archetype
+
                 #select_query
+
+                #list_impl
 
                 #deserialize_components
                 #serialize_components

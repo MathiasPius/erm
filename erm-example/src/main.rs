@@ -57,7 +57,21 @@ async fn main() {
     to_insert.insert(&db, &"a").await;
     to_insert.insert(&db, &"c").await;
 
-    let mut stream = PhysicsObject::list::<String, _>(&db);
+    let replacement = PhysicsObject {
+        position: Position {
+            name: "lmao?".to_string(),
+            x: 333,
+            y: 444,
+        },
+        label: Label {
+            label: "Something else here?".to_string(),
+            label2: "Label 3".to_string(),
+        },
+    };
+
+    replacement.update(&db, "a").await;
+
+    let mut stream = PhysicsObject::list::<String>(&db);
     while let Some(result) = stream.next().await {
         let (entity, obj) = result.unwrap();
         println!("{entity}: {obj:#?}");

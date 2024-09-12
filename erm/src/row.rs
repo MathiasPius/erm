@@ -39,7 +39,7 @@ impl<'r, R: Row> OffsetRow<'r, R> {
 
 /// FromRow-implementing wrapper around Components
 #[derive(Debug)]
-pub(crate) struct Rowed<Entity, T> {
+pub struct Rowed<Entity, T> {
     pub entity: Entity,
     pub inner: T,
 }

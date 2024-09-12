@@ -78,6 +78,26 @@ pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
     }
 }
 
+pub fn update_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
+    let sub_archetypes = fields.iter().map(|field| {
+        let name = field.ident.as_ref().unwrap();
+        let typename = &field.ty;
+
+        quote! {
+            <#typename as ::erm::Archetype<#database>>::update_archetype(&self.#name, query);
+        }
+    });
+
+    quote! {
+        fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
+        where
+            Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
+        {
+            #(#sub_archetypes)*
+        }
+    }
+}
+
 pub fn create_component_table(
     database: &TokenStream,
     table: &str,
@@ -130,10 +150,10 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
 
     let first_item = &fields.next().unwrap().ty;
     let first = quote! {
-        let join = <#first_item as Archetype<#database>>::select_statement();
+        let join = <#first_item as Archetype<#database>>::list_statement();
     };
 
-    let select_statements = fields.map(|field| {
+    let list_statements = fields.map(|field| {
         let field = &field.ty;
 
         quote! {
@@ -143,7 +163,7 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
                     "entity".to_string(),
                 ),
                 right: (
-                    Box::new(<#field as Archetype<#database>>::select_statement()),
+                    Box::new(<#field as Archetype<#database>>::list_statement()),
                     "entity".to_string(),
                 ),
             }
@@ -151,9 +171,9 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
     });
 
     quote! {
-        fn select_statement() -> impl ::erm::cte::CommonTableExpression {
+        fn list_statement() -> impl ::erm::cte::CommonTableExpression {
             #first;
-            #(#select_statements;)*
+            #(#list_statements;)*
 
             join
         }

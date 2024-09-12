@@ -4,7 +4,7 @@ mod archetype;
 mod component;
 pub mod cte;
 mod entity;
-mod row;
+pub mod row;
 
 pub use archetype::Archetype;
 pub use component::{ColumnDefinition, Component};
