@@ -6,7 +6,7 @@ use tracing::{instrument, span, Instrument, Level};
 
 use crate::{
     cte::{CommonTableExpression, InnerJoin, Select},
-    insert::InsertionQuery,
+    entity::EntityPrefixedQuery,
     row::Rowed,
     Component, OffsetRow,
 };
@@ -14,7 +14,7 @@ use crate::{
 pub trait Archetype<DB: Database>: Sized {
     fn insert_archetype<'query, Entity>(
         &'query self,
-        query: &mut InsertionQuery<'query, DB, Entity>,
+        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
     ) where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 
@@ -100,7 +100,7 @@ pub trait Archetype<DB: Database>: Sized {
             Executor<'connection, Database = DB>,
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
     {
-        let mut inserts = InsertionQuery::<'_, DB, Entity>::new(entity);
+        let mut inserts = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
 
         <Self as Archetype<DB>>::insert_archetype(&self, &mut inserts);
 
@@ -121,7 +121,7 @@ where
 {
     fn insert_archetype<'query, Entity>(
         &'query self,
-        query: &mut InsertionQuery<'query, DB, Entity>,
+        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
     ) where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
@@ -158,7 +158,7 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn insert_archetype<'query, Entity>(&'query self, query: &mut InsertionQuery<'query, $db, Entity>)
+            fn insert_archetype<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, $db, Entity>)
             where
                 Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
             {

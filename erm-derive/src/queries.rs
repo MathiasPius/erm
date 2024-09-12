@@ -22,25 +22,40 @@ fn type_info<'database, 'field>(
 }
 
 /// Generates placeholder values corresponding to the number of columns.
-fn placeholders(character: char, count: usize) -> String {
+fn placeholders(character: char, count: usize) -> Vec<String> {
     std::iter::repeat(character)
         .enumerate()
         .skip(1)
         .take(count)
         .map(|(i, character)| format!("{character}{i}"))
         .collect::<Vec<_>>()
-        .join(", ")
 }
 
 pub fn insert_component(table: &str, character: char, data: &DataStruct) -> String {
     let column_names = data.fields.iter().map(names).collect::<Vec<_>>();
 
-    let placeholders = placeholders(character, column_names.len() + 1);
+    let placeholders = placeholders(character, column_names.len() + 1).join(", ");
 
     format!(
         "insert into {table}(entity, {column_names}) values({placeholders});",
         column_names = column_names.join(", ")
     )
+}
+
+pub fn update_component(table: &str, character: char, data: &DataStruct) -> String {
+    let column_names = data.fields.iter().map(names);
+
+    let placeholders = placeholders(character, column_names.len() + 1)
+        .into_iter()
+        .skip(1);
+
+    let field_updates = column_names
+        .zip(placeholders)
+        .map(|(column, placeholder)| format!("{column} = {placeholder}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("update {table} set {field_updates} where entity = {character}1")
 }
 
 pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
@@ -54,7 +69,7 @@ pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
     });
 
     quote! {
-        fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::InsertionQuery<'query, #database, Entity>)
+        fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {

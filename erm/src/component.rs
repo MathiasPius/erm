@@ -2,7 +2,7 @@ use std::future::Future;
 
 use sqlx::{query::Query, Database, Pool};
 
-use crate::{insert::InsertionQuery, OffsetRow};
+use crate::{entity::EntityPrefixedQuery, OffsetRow};
 
 pub struct ColumnDefinition<DB: Database> {
     pub name: &'static str,
@@ -22,6 +22,7 @@ impl<DB: Database> ColumnDefinition<DB> {
 /// Describes reading and writing from a Component-specific Table.
 pub trait Component<DB: Database>: std::fmt::Debug + Sized {
     const INSERT: &'static str;
+    const UPDATE: &'static str;
 
     fn table() -> &'static str;
 
@@ -36,7 +37,7 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
 
     fn insert_component<'query, Entity>(
         &'query self,
-        query: &mut InsertionQuery<'query, DB, Entity>,
+        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
     ) where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {

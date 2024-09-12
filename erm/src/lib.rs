@@ -3,12 +3,12 @@
 mod archetype;
 mod component;
 pub mod cte;
-mod insert;
+mod entity;
 mod row;
 
 pub use archetype::Archetype;
 pub use component::{ColumnDefinition, Component};
-pub use insert::InsertionQuery;
+pub use entity::EntityPrefixedQuery;
 pub use row::OffsetRow;
 
 #[cfg(feature = "derive")]

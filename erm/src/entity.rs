@@ -1,6 +1,6 @@
 use sqlx::{query::Query, Database};
 
-pub struct InsertionQuery<'q, DB, Entity>
+pub struct EntityPrefixedQuery<'q, DB, Entity>
 where
     DB: Database,
 {
@@ -8,13 +8,13 @@ where
     pub entity: Entity,
 }
 
-impl<'query, DB, Entity> InsertionQuery<'query, DB, Entity>
+impl<'query, DB, Entity> EntityPrefixedQuery<'query, DB, Entity>
 where
     DB: Database,
     Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
 {
     pub fn new(entity: Entity) -> Self {
-        InsertionQuery {
+        EntityPrefixedQuery {
             queries: Vec::new(),
             entity,
         }
@@ -37,11 +37,11 @@ where
 mod tests {
     use sqlx::Sqlite;
 
-    use super::InsertionQuery;
+    use super::EntityPrefixedQuery;
 
     #[test]
     fn test_db() {
-        let mut insert = InsertionQuery::<'_, Sqlite, _> {
+        let mut insert = EntityPrefixedQuery::<'_, Sqlite, _> {
             queries: vec![],
             entity: 12345,
         };
