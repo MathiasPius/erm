@@ -3,7 +3,7 @@ use std::{future::Future, marker::PhantomData};
 use futures::Stream;
 use sqlx::{Pool, Sqlite};
 
-use crate::Archetype;
+use crate::{condition::Condition, Archetype};
 
 use super::Backend;
 
@@ -31,11 +31,15 @@ where
         + 'static,
     for<'entity> &'entity Entity: Send,
 {
-    fn list<T>(&self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
+    fn list<T, Cond>(
+        &self,
+        condition: Cond,
+    ) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
+        Cond: Condition<Entity>,
     {
-        <T as Archetype<Sqlite>>::list(&self.pool)
+        <T as Archetype<Sqlite>>::list(&self.pool, condition)
     }
 
     fn get<'pool, 'entity, T>(

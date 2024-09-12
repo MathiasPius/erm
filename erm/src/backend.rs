@@ -3,7 +3,10 @@ use std::future::Future;
 use futures::Stream;
 use sqlx::Database;
 
-use crate::Archetype;
+use crate::{
+    condition::{All, Condition},
+    Archetype,
+};
 
 mod sqlite;
 
@@ -18,9 +21,20 @@ where
         + Send
         + 'static,
 {
-    fn list<T>(&self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
+    fn list<T, Cond>(
+        &self,
+        condition: Cond,
+    ) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
     where
-        T: Archetype<DB> + Unpin + Send + 'static;
+        T: Archetype<DB> + Unpin + Send + 'static,
+        Cond: Condition<Entity>;
+
+    fn list_all<T>(&self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
+    where
+        T: Archetype<DB> + Unpin + Send + 'static,
+    {
+        self.list(All)
+    }
 
     fn get<'pool, 'entity, T>(
         &'pool self,

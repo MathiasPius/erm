@@ -3,7 +3,7 @@
 mod archetype;
 pub mod backend;
 mod component;
-mod condition;
+pub mod condition;
 pub mod cte;
 mod entity;
 pub mod row;

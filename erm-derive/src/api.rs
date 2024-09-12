@@ -3,8 +3,9 @@ use quote::quote;
 
 pub fn list_impl(database: &TokenStream) -> TokenStream {
     quote! {
-        fn list<'pool, Entity>(
+        fn list<'pool, Entity, Cond>(
             executor: &'pool ::sqlx::Pool<#database>,
+            condition: Cond,
         ) -> impl ::futures::Stream<Item = Result<(Entity, Self), ::sqlx::Error>> + Send
         where
             Self: Unpin + Send + 'static,
@@ -12,17 +13,24 @@ pub fn list_impl(database: &TokenStream) -> TokenStream {
                 ::sqlx::IntoArguments<'connection, #database> + Send,
             for<'connection> &'connection mut <#database as ::sqlx::Database>::Connection:
                 ::sqlx::Executor<'connection, Database = #database>,
-            Entity: for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + 'static,
+            Entity: for<'q> ::sqlx::Encode<'q, #database> + for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + 'static,
             usize: ::sqlx::ColumnIndex<<#database as ::sqlx::Database>::Row>,
+            Cond: ::erm::condition::Condition<Entity>,
         {
             use ::erm::cte::CommonTableExpression as _;
+            use ::erm::condition::Condition as _;
             static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
 
+            let serialized_condition = condition.serialize();
+            //// TODO: Fix this static shit
+            let query = SQL.get_or_init(|| format!("{} where {}", <Self as ::erm::Archetype<#database>>::list_statement().serialize(), serialized_condition));
+
+            println!("{query}, {}", condition.serialize());
             let query = ::sqlx::query_as(
-                &SQL.get_or_init(|| <Self as ::erm::Archetype<#database>>::list_statement().serialize()),
+                &query,
             );
 
-            query
+            condition.bind(query)
                 .fetch(executor)
                 .map(|row| row.map(|result: ::erm::row::Rowed<Entity, Self>| (result.entity, result.inner)))
         }

@@ -4,6 +4,7 @@ use futures::{FutureExt, Stream, StreamExt as _};
 use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 use crate::{
+    condition::Condition,
     cte::{CommonTableExpression, Filter, InnerJoin, Select},
     entity::EntityPrefixedQuery,
     row::Rowed,
@@ -32,8 +33,9 @@ pub trait Archetype<DB: Database>: Sized {
         }
     }
 
-    fn list<'pool, Entity>(
+    fn list<'pool, Entity, Cond>(
         pool: &'pool Pool<DB>,
+        condition: Cond,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
         Self: Unpin + Send + 'static,
@@ -41,8 +43,14 @@ pub trait Archetype<DB: Database>: Sized {
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
-        usize: ColumnIndex<<DB as sqlx::Database>::Row>;
+        Entity: for<'q> sqlx::Encode<'q, DB>
+            + for<'a> sqlx::Decode<'a, DB>
+            + sqlx::Type<DB>
+            + Unpin
+            + Send
+            + 'static,
+        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
+        Cond: Condition<Entity>;
 
     fn get<'pool, 'entity, Entity>(
         pool: &'pool Pool<DB>,
@@ -155,8 +163,9 @@ where
         }
     }
 
-    fn list<'pool, Entity>(
+    fn list<'pool, Entity, Cond>(
         pool: &'pool Pool<DB>,
+        condition: Cond,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
         Self: Unpin + Send + 'static,
@@ -164,14 +173,25 @@ where
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
+        Entity: for<'q> sqlx::Encode<'q, DB>
+            + for<'a> sqlx::Decode<'a, DB>
+            + sqlx::Type<DB>
+            + Unpin
+            + Send
+            + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
+        Cond: Condition<Entity>,
     {
         static SQL: OnceLock<String> = OnceLock::new();
 
-        let query = sqlx::query_as(
-            &SQL.get_or_init(|| <Self as Archetype<DB>>::list_statement().serialize()),
-        );
+        let serialized_condition = condition.serialize();
+        let query = condition.bind(sqlx::query_as(&SQL.get_or_init(|| {
+            format!(
+                "{} where {}",
+                <Self as Archetype<DB>>::list_statement().serialize(),
+                serialized_condition
+            )
+        })));
 
         query
             .fetch(pool)
@@ -260,8 +280,9 @@ macro_rules! impl_compound_for_db{
                 }
             }
 
-            fn list<'pool, Entity>(
+            fn list<'pool, Entity, Cond>(
                 executor: &'pool Pool<$db>,
+                condition: Cond,
             ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
             where
                 Self: Unpin + Send + 'static,
@@ -271,11 +292,15 @@ macro_rules! impl_compound_for_db{
                     Executor<'connection, Database = $db>,
                 Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + 'static,
                 usize: ColumnIndex<<$db as sqlx::Database>::Row>,
+                Cond: Condition<Entity>,
             {
                 static SQL: OnceLock<String> = OnceLock::new();
 
+                let serialized_condition = condition.serialize();
                 let query = sqlx::query_as(
-                    &SQL.get_or_init(|| <Self as Archetype<$db>>::list_statement().serialize()),
+                        &SQL.get_or_init(|| format!("{} where {}", <Self as Archetype<$db>>::list_statement().serialize(),
+                        serialized_condition)
+                    )
                 );
 
                 query
