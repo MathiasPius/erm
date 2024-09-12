@@ -36,12 +36,12 @@ pub trait Archetype<DB: Database>: Sized {
         pool: &'pool Pool<DB>,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
-        Self: Unpin + Send + Sync + 'static,
+        Self: Unpin + Send + 'static,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>;
 
     fn get<'pool, 'entity, Entity>(
@@ -49,13 +49,13 @@ pub trait Archetype<DB: Database>: Sized {
         entity: &'entity Entity,
     ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
     where
-        Self: Unpin + Send + Sync + 'static,
+        Self: Unpin + Send + 'static,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'entity,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
+        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Send + 'entity,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
         'pool: 'entity;
 
@@ -65,7 +65,7 @@ pub trait Archetype<DB: Database>: Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Send + Sync,
+        Self: Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -92,7 +92,7 @@ pub trait Archetype<DB: Database>: Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Send + Sync,
+        Self: Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -159,12 +159,12 @@ where
         pool: &'pool Pool<DB>,
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
     where
-        Self: Unpin + Send + Sync + 'static,
+        Self: Unpin + Send + 'static,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
         static SQL: OnceLock<String> = OnceLock::new();
@@ -183,13 +183,13 @@ where
         entity: &'entity Entity,
     ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
     where
-        Self: Unpin + Send + Sync + 'static,
+        Self: Unpin + Send + 'static,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'entity,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + Sync + 'static,
+        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + 'entity,
+        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
         'pool: 'entity,
     {
@@ -264,12 +264,12 @@ macro_rules! impl_compound_for_db{
                 executor: &'pool Pool<$db>,
             ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>> + Send
             where
-                Self: Unpin + Send + Sync + 'static,
+                Self: Unpin + Send + 'static,
                 for<'connection> <$db as sqlx::Database>::Arguments<'connection>:
                     IntoArguments<'connection, $db> + Send,
                 for<'connection> &'connection mut <$db as sqlx::Database>::Connection:
                     Executor<'connection, Database = $db>,
-                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + Sync + 'static,
+                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + 'static,
                 usize: ColumnIndex<<$db as sqlx::Database>::Row>,
             {
                 static SQL: OnceLock<String> = OnceLock::new();
@@ -288,13 +288,13 @@ macro_rules! impl_compound_for_db{
                 entity: &'entity Entity,
             ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
             where
-                Self: Unpin + Send + Sync + 'static,
+                Self: Unpin + Send + 'static,
                 for<'connection> <$db as sqlx::Database>::Arguments<'connection>:
                     IntoArguments<'connection, $db> + Send,
                 for<'connection> &'connection mut <$db as sqlx::Database>::Connection:
                     Executor<'connection, Database = $db>,
-                &'entity Entity: sqlx::Encode<'entity, $db> + sqlx::Type<$db> + Unpin + Send + Sync + 'entity,
-                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + Sync + 'static,
+                &'entity Entity: sqlx::Encode<'entity, $db> + sqlx::Type<$db> + 'entity,
+                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + 'static,
                 usize: ColumnIndex<<$db as sqlx::Database>::Row>,
                 'pool: 'entity,
             {

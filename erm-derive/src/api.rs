@@ -7,12 +7,12 @@ pub fn list_impl(database: &TokenStream) -> TokenStream {
             executor: &'pool ::sqlx::Pool<#database>,
         ) -> impl ::futures::Stream<Item = Result<(Entity, Self), ::sqlx::Error>> + Send
         where
-            Self: Unpin + Send + Sync + 'static,
+            Self: Unpin + Send + 'static,
             for<'connection> <#database as ::sqlx::Database>::Arguments<'connection>:
                 ::sqlx::IntoArguments<'connection, #database> + Send,
             for<'connection> &'connection mut <#database as ::sqlx::Database>::Connection:
                 ::sqlx::Executor<'connection, Database = #database>,
-            Entity: for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + Sync + 'static,
+            Entity: for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + 'static,
             usize: ::sqlx::ColumnIndex<<#database as ::sqlx::Database>::Row>,
         {
             use ::erm::cte::CommonTableExpression as _;
@@ -36,13 +36,13 @@ pub fn get_impl(database: &TokenStream) -> TokenStream {
             entity: &'entity Entity,
         ) -> impl ::futures::Future<Output = Result<Self, ::sqlx::Error>> + Send
         where
-            Self: Unpin + Send + Sync + 'static,
+            Self: Unpin + Send + 'static,
             for<'connection> <#database as ::sqlx::Database>::Arguments<'connection>:
                 ::sqlx::IntoArguments<'connection, #database> + Send,
             for<'connection> &'connection mut <#database as ::sqlx::Database>::Connection:
                 ::sqlx::Executor<'connection, Database = #database>,
-            &'entity Entity: ::sqlx::Encode<'entity, #database> + ::sqlx::Type<#database> + Unpin + Send + Sync + 'entity,
-            Entity: for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + Sync + 'static,
+            &'entity Entity: ::sqlx::Encode<'entity, #database> + ::sqlx::Type<#database> + Send + 'entity,
+            Entity: for<'a> ::sqlx::Decode<'a, #database> + ::sqlx::Type<#database> + Unpin + Send + 'static,
             usize: ::sqlx::ColumnIndex<<#database as sqlx::Database>::Row>,
             'pool: 'entity,
         {

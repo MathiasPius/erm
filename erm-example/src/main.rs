@@ -80,6 +80,4 @@ async fn main() {
         let (entity, obj) = result.unwrap();
         println!("{entity}: {obj:#?}");
     }
-
-    //println!("{:#?}", PhysicsObject::get(&db, &"c").await.unwrap());
 }

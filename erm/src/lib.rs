@@ -1,6 +1,7 @@
 #![feature(macro_metavar_expr)]
 
 mod archetype;
+pub mod backend;
 mod component;
 pub mod cte;
 mod entity;
