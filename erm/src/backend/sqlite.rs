@@ -45,4 +45,26 @@ where
     {
         <T as Archetype<Sqlite>>::get(&self.pool, entity)
     }
+
+    fn insert<'a, T>(
+        &'a self,
+        entity: &'a Entity,
+        components: &'a T,
+    ) -> impl Future<Output = ()> + 'a
+    where
+        T: Archetype<Sqlite> + Unpin + Send + 'static,
+    {
+        <T as Archetype<Sqlite>>::insert(&components, &self.pool, entity)
+    }
+
+    fn update<'a, T>(
+        &'a self,
+        entity: &'a Entity,
+        components: &'a T,
+    ) -> impl Future<Output = ()> + 'a
+    where
+        T: Archetype<Sqlite> + Unpin + Send + 'static,
+    {
+        <T as Archetype<Sqlite>>::update(&components, &self.pool, entity)
+    }
 }

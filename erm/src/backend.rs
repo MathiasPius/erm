@@ -21,6 +21,22 @@ where
         + Send
         + 'static,
 {
+    fn insert<'a, T>(
+        &'a self,
+        entity: &'a Entity,
+        components: &'a T,
+    ) -> impl Future<Output = ()> + 'a
+    where
+        T: Archetype<DB> + Unpin + Send + 'static;
+
+    fn update<'a, T>(
+        &'a self,
+        entity: &'a Entity,
+        components: &'a T,
+    ) -> impl Future<Output = ()> + 'a
+    where
+        T: Archetype<DB> + Unpin + Send + 'static;
+
     fn list<T, Cond>(&self, cond: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<DB> + Unpin + Send + 'static,
