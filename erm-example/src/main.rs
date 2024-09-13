@@ -78,14 +78,16 @@ async fn main() {
 
     assert_eq!(replacement, PhysicsObject::get(&db, &entity).await.unwrap());
 
-    let mut stream = PhysicsObject::list::<String, _>(&db, All);
+    let mut stream = Box::pin(PhysicsObject::list::<String, _>(&db, All));
     while let Some(result) = stream.next().await {
         let (entity, obj) = result.unwrap();
         println!("{entity}: {obj:#?}");
     }
 
-    let mut stream =
-        PhysicsObject::list::<String, _>(&db, Equality::new("posname", "lmao?".to_string()));
+    let mut stream = Box::pin(PhysicsObject::list::<String, _>(
+        &db,
+        Equality::new("posname", "lmao?".to_string()),
+    ));
     while let Some(result) = stream.next().await {
         let (entity, obj) = result.unwrap();
         println!("find: {entity}: {obj:#?}");

@@ -31,10 +31,7 @@ where
         + 'static,
     for<'entity> &'entity Entity: Send,
 {
-    fn list<T, Cond>(
-        &self,
-        condition: Cond,
-    ) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> + Send
+    fn list<T, Cond>(&self, condition: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
         Cond: Condition<Entity>,

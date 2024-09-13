@@ -1,13 +1,11 @@
-use api::{get_impl, list_impl};
+mod queries;
+mod serde;
+
 use proc_macro2::{Ident, TokenStream};
 use queries::{insert_archetype, select_query, update_archetype};
 use quote::{quote, TokenStreamExt};
 use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
-
-mod api;
-mod queries;
-mod serde;
 
 #[proc_macro_derive(Component)]
 pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -103,8 +101,6 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let insert_archetype = insert_archetype(&database, &data.fields);
         let update_archetype = update_archetype(&database, &data.fields);
 
-        let list_impl = list_impl(&database);
-
         quote! {
             impl ::erm::Archetype<#database> for #archetype_name
             {
@@ -113,7 +109,6 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
                 #select_query
 
-                #list_impl
 
                 #deserialize_components
                 #serialize_components
