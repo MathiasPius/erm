@@ -57,5 +57,5 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
         pool: &'pool Pool<DB>,
     ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where
-        Entity: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB> + Clone;
+        Entity: sqlx::Type<DB>;
 }

@@ -31,6 +31,13 @@ where
         + 'static,
     for<'entity> &'entity Entity: Send,
 {
+    fn init<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
+    where
+        T: Archetype<Sqlite>,
+    {
+        <T as Archetype<Sqlite>>::create_component_tables::<Entity>(&self.pool)
+    }
+
     fn list<T, Cond>(&self, condition: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
@@ -46,12 +53,14 @@ where
         <T as Archetype<Sqlite>>::get(&self.pool, entity)
     }
 
-    fn insert<'a, T>(
+    fn insert<'a, 'b, 'c, T>(
         &'a self,
-        entity: &'a Entity,
-        components: &'a T,
-    ) -> impl Future<Output = ()> + 'a
+        entity: &'b Entity,
+        components: &'c T,
+    ) -> impl Future<Output = ()> + Send + 'c
     where
+        'a: 'b,
+        'b: 'c,
         T: Archetype<Sqlite> + Unpin + Send + 'static,
     {
         <T as Archetype<Sqlite>>::insert(&components, &self.pool, entity)

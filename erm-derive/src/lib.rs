@@ -2,7 +2,9 @@ mod queries;
 mod serde;
 
 use proc_macro2::{Ident, TokenStream};
-use queries::{insert_archetype, select_query, update_archetype};
+use queries::{
+    create_archetype_component_tables, insert_archetype, select_query, update_archetype,
+};
 use quote::{quote, TokenStreamExt};
 use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
@@ -101,9 +103,14 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let insert_archetype = insert_archetype(&database, &data.fields);
         let update_archetype = update_archetype(&database, &data.fields);
 
+        let create_archetype_component_tables =
+            create_archetype_component_tables(&database, &data.fields);
+
         quote! {
             impl ::erm::Archetype<#database> for #archetype_name
             {
+                #create_archetype_component_tables
+
                 #insert_archetype
                 #update_archetype
 

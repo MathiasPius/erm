@@ -58,6 +58,29 @@ pub fn update_component(table: &str, character: char, data: &DataStruct) -> Stri
     format!("update {table} set {field_updates} where entity = {character}1")
 }
 
+pub fn create_archetype_component_tables(database: &TokenStream, fields: &Fields) -> TokenStream {
+    let sub_archetypes = fields.iter().map(|field| {
+        let typename = &field.ty;
+
+        quote! {
+            <#typename as ::erm::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
+        }
+    });
+
+    quote! {
+        fn create_component_tables<'a, Entity>(
+            pool: &'a ::sqlx::Pool<#database>,
+        ) -> impl ::std::future::Future<Output = Result<(), ::sqlx::Error>> + Send + 'a where Entity: ::sqlx::Type<#database> {
+
+            async move {
+                #(#sub_archetypes)*
+
+                Ok(())
+            }
+        }
+    }
+}
+
 pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
     let sub_archetypes = fields.iter().map(|field| {
         let name = field.ident.as_ref().unwrap();
@@ -112,7 +135,8 @@ pub fn create_component_table(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let format_str = format!("create table {table}(entity {{}} primary key, {format_str}\n);");
+    let format_str =
+        format!("create table if not exists {table}(entity {{}} primary key, {format_str}\n);");
 
     let arguments = quote! {
         <Entity as ::sqlx::Type<#database>>::type_info().name(),
@@ -127,20 +151,19 @@ pub fn create_component_table(
             pool: &'pool ::sqlx::Pool<#database>,
         ) -> impl ::core::future::Future<Output = Result<<#database as ::sqlx::Database>::QueryResult, ::sqlx::Error>> + Send
         where
-            Entity: for<'q> sqlx::Encode<'q, #database> + sqlx::Type<#database> + Clone,
+            Entity: sqlx::Type<#database>,
         {
             use ::sqlx::TypeInfo as _;
             use ::sqlx::Executor as _;
 
-            static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
-            let sql = SQL.get_or_init(||
-                format!(
+            async move {
+                let sql = format!(
                     #format_str,
                     #arguments
-                )
-            ).as_str();
+                );
 
-            pool.execute(sql)
+                pool.execute(sql.as_str()).await
+            }
         }
     }
 }
@@ -150,7 +173,7 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
 
     let first_item = &fields.next().unwrap().ty;
     let first = quote! {
-        let join = <#first_item as Archetype<#database>>::list_statement();
+        let join = <#first_item as ::erm::Archetype<#database>>::list_statement();
     };
 
     let list_statements = fields.map(|field| {
@@ -163,7 +186,7 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
                     "entity".to_string(),
                 ),
                 right: (
-                    Box::new(<#field as Archetype<#database>>::list_statement()),
+                    Box::new(<#field as ::erm::Archetype<#database>>::list_statement()),
                     "entity".to_string(),
                 ),
             }

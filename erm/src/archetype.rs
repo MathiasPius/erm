@@ -13,6 +13,12 @@ use crate::{
 };
 
 pub trait Archetype<DB: Database>: Sized {
+    fn create_component_tables<'a, Entity>(
+        pool: &'a Pool<DB>,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a
+    where
+        Entity: sqlx::Type<DB>;
+
     fn insert_archetype<'query, Entity>(
         &'query self,
         query: &mut EntityPrefixedQuery<'query, DB, Entity>,
@@ -149,6 +155,19 @@ impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
 {
+    fn create_component_tables<'a, Entity>(
+        pool: &'a Pool<DB>,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a
+    where
+        Entity: sqlx::Type<DB>,
+    {
+        async move {
+            <T as Component<DB>>::create_component_table::<Entity>(pool).await?;
+
+            Ok(())
+        }
+    }
+
     fn insert_archetype<'query, Entity>(
         &'query self,
         query: &mut EntityPrefixedQuery<'query, DB, Entity>,
@@ -191,12 +210,53 @@ where
     }
 }
 
+macro_rules! expand_inner_join {
+    ($db:ty, $first:ident, $second:ident) => {
+        InnerJoin {
+            left: (
+                Box::new(<$first as Archetype<$db>>::list_statement()),
+                "entity".to_string(),
+            ),
+            right: (
+                Box::new(<$second as Archetype<$db>>::list_statement()),
+                "entity".to_string(),
+            ),
+        }
+    };
+
+    ($db:ty, $first:ident, $($list:ident),*) => {
+        InnerJoin {
+            left: (
+                Box::new(<$first as Archetype<$db>>::list_statement()),
+                "entity".to_string(),
+            ),
+            right: (
+                Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
+                "entity".to_string(),
+            ),
+        }
+    };
+}
+
 macro_rules! impl_compound_for_db{
     ($db:ty, $($list:ident),*) => {
         impl<$($list),*> Archetype<$db> for ($($list,)*)
         where
             $($list: Archetype<$db>,)*
         {
+            fn create_component_tables<'a, Entity>(
+                pool: &'a Pool<$db>,
+            ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a where Entity: sqlx::Type<$db> {
+
+                async move {
+                    $(
+                        <$list as Archetype<$db>>::create_component_tables::<Entity>(pool).await?;
+                    )*
+
+                    Ok(())
+                }
+            }
+
             fn insert_archetype<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, $db, Entity>)
             where
                 Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
@@ -224,16 +284,7 @@ macro_rules! impl_compound_for_db{
             }
 
             fn list_statement() -> impl CommonTableExpression {
-                InnerJoin {
-                    left: (
-                        Box::new(<A as Archetype<$db>>::list_statement()),
-                        "entity".to_string(),
-                    ),
-                    right: (
-                        Box::new(<B as Archetype<$db>>::list_statement()),
-                        "entity".to_string(),
-                    ),
-                }
+                expand_inner_join!($db, $($list),*)
             }
 
             fn serialize_components<'q>(

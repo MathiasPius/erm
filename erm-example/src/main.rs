@@ -1,33 +1,31 @@
 use erm::{
-    condition::{All, Equality},
+    backend::{Backend, SqliteBackend},
+    condition::Equality,
     Archetype, Component,
 };
 use futures::StreamExt as _;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use uuid::Uuid;
+
+#[derive(Debug, Component, PartialEq, Eq)]
+struct FriendlyName {
+    friendly_name: String,
+}
 
 #[derive(Debug, Component, PartialEq, Eq)]
 struct Position {
-    posname: String,
-    x: u32,
-    y: u32,
+    pub x: i64,
+    pub y: i64,
 }
 
 #[derive(Debug, Component, PartialEq, Eq)]
-struct Label {
-    label: String,
-    label2: String,
-}
-
-#[derive(Debug, Archetype, PartialEq, Eq)]
-struct PhysicsObject {
-    pub label: Label,
-    pub position: Position,
+struct Parent {
+    pub parent: Uuid,
 }
 
 #[tokio::main]
 async fn main() {
     let options = SqliteConnectOptions::new()
-        //.filename("test.sqlite3")
         .in_memory(true)
         .create_if_missing(true);
 
@@ -40,56 +38,51 @@ async fn main() {
         .await
         .unwrap();
 
-    Position::create_component_table::<String>(&db)
+    let backend: SqliteBackend<Uuid> = SqliteBackend::new(db);
+
+    backend
+        .init::<(FriendlyName, Position, Parent)>()
         .await
         .unwrap();
-    Label::create_component_table::<String>(&db).await.unwrap();
 
-    let to_insert = PhysicsObject {
-        position: Position {
-            posname: "lol?".to_string(),
-            x: 111,
-            y: 222,
-        },
-        label: Label {
-            label: "Something goes here?".to_string(),
-            label2: "Label 2".to_string(),
-        },
-    };
+    let alice = backend
+        .spawn(&(
+            FriendlyName {
+                friendly_name: "Alice".to_string(),
+            },
+            Position { x: 10, y: 20 },
+        ))
+        .await;
 
-    to_insert.insert(&db, &"a").await;
-    to_insert.insert(&db, &"c").await;
+    let bob = backend
+        .spawn(&(
+            FriendlyName {
+                friendly_name: "Bob".to_string(),
+            },
+            Position { x: 30, y: 30 },
+            Parent { parent: alice },
+        ))
+        .await;
 
-    let replacement = PhysicsObject {
-        position: Position {
-            posname: "lmao?".to_string(),
-            x: 333,
-            y: 444,
-        },
-        label: Label {
-            label: "Something else here?".to_string(),
-            label2: "Label 3".to_string(),
-        },
-    };
+    let charlie = backend
+        .spawn(&(
+            FriendlyName {
+                friendly_name: "Charlie".to_string(),
+            },
+            Position { x: 40, y: 40 },
+            Parent { parent: bob },
+        ))
+        .await;
 
-    replacement.update(&db, "a").await;
-
-    let entity = "a".to_string();
-
-    assert_eq!(replacement, PhysicsObject::get(&db, &entity).await.unwrap());
-
-    let mut stream = Box::pin(PhysicsObject::list::<String, _>(&db, All));
-    while let Some(result) = stream.next().await {
-        let (entity, obj) = result.unwrap();
-        println!("{entity}: {obj:#?}");
+    #[derive(Debug, Archetype)]
+    pub struct Person {
+        name: FriendlyName,
+        parent: Parent,
     }
 
-    let mut stream = Box::pin(PhysicsObject::list::<String, _>(
-        &db,
-        Equality::new("posname", "lmao?".to_string()),
-    ));
-    while let Some(result) = stream.next().await {
-        let (entity, obj) = result.unwrap();
-        println!("find: {entity}: {obj:#?}");
+    let mut children = Box::pin(backend.list::<Person, _>(Equality::new("parent", bob)));
+
+    while let Some(child) = children.next().await {
+        println!("{:#?}", child);
     }
 }
