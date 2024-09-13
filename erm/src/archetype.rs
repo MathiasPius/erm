@@ -52,20 +52,26 @@ pub trait Archetype<DB: Database>: Sized {
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
         Cond: Condition<Entity>;
 
-    fn get<'pool, 'entity, Entity>(
-        pool: &'pool Pool<DB>,
-        entity: &'entity Entity,
-    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
+    fn get<Entity>(
+        pool: &Pool<DB>,
+        entity: &Entity,
+    ) -> impl Future<Output = Result<Self, sqlx::Error>>
     where
-        Self: Unpin + Send + 'static,
+        Self: Unpin + Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
-        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
-            Executor<'connection, Database = DB>,
-        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Send + 'entity,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
+        for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
+        for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
-        'pool: 'entity;
+    {
+        async move {
+            let sql = <Self as Archetype<DB>>::get_statement().serialize();
+            let result: Rowed<Entity, Self> =
+                sqlx::query_as(&sql).bind(entity).fetch_one(pool).await?;
+
+            Ok(result.inner)
+        }
+    }
 
     fn insert<'query, Entity>(
         &'query self,
@@ -198,29 +204,6 @@ where
             .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
     }
 
-    fn get<'pool, 'entity, Entity>(
-        pool: &'pool Pool<DB>,
-        entity: &'entity Entity,
-    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send + 'entity
-    where
-        Self: Unpin + Send + 'static,
-        for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
-            IntoArguments<'connection, DB> + Send,
-        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
-            Executor<'connection, Database = DB>,
-        &'entity Entity: sqlx::Encode<'entity, DB> + sqlx::Type<DB> + Unpin + Send + 'entity,
-        Entity: for<'a> sqlx::Decode<'a, DB> + sqlx::Type<DB> + Unpin + Send + 'static,
-        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
-        'pool: 'entity,
-    {
-        static SQL: OnceLock<String> = OnceLock::new();
-
-        sqlx::query_as(&SQL.get_or_init(|| <Self as Archetype<DB>>::get_statement().serialize()))
-            .bind(entity)
-            .fetch_one(pool)
-            .map(move |row| row.map(|result: Rowed<Entity, Self>| result.inner))
-    }
-
     fn serialize_components<'q>(
         &'q self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
@@ -306,29 +289,6 @@ macro_rules! impl_compound_for_db{
                 query
                     .fetch(executor)
                     .map(|row| row.map(|result: Rowed<Entity, Self>| (result.entity, result.inner)))
-            }
-
-            fn get<'pool, 'entity, Entity>(
-                pool: &'pool Pool<$db>,
-                entity: &'entity Entity,
-            ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
-            where
-                Self: Unpin + Send + 'static,
-                for<'connection> <$db as sqlx::Database>::Arguments<'connection>:
-                    IntoArguments<'connection, $db> + Send,
-                for<'connection> &'connection mut <$db as sqlx::Database>::Connection:
-                    Executor<'connection, Database = $db>,
-                &'entity Entity: sqlx::Encode<'entity, $db> + sqlx::Type<$db> + 'entity,
-                Entity: for<'a> sqlx::Decode<'a, $db> + sqlx::Type<$db> + Unpin + Send + 'static,
-                usize: ColumnIndex<<$db as sqlx::Database>::Row>,
-                'pool: 'entity,
-            {
-                static SQL: OnceLock<String> = OnceLock::new();
-
-                sqlx::query_as(&SQL.get_or_init(|| <Self as Archetype<$db>>::get_statement().serialize()))
-                    .bind(entity)
-                    .fetch_one(pool)
-                    .map(move |row| row.map(|result: Rowed<Entity, Self>| result.inner))
             }
 
             fn serialize_components<'q>(

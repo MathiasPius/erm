@@ -36,11 +36,7 @@ where
         self.list(All)
     }
 
-    fn get<'pool, 'entity, T>(
-        &'pool self,
-        entity: &'entity Entity,
-    ) -> impl Future<Output = Result<T, sqlx::Error>> + Send + 'entity
+    fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
     where
-        'pool: 'entity,
         T: Archetype<DB> + Unpin + Send + 'static;
 }

@@ -42,13 +42,9 @@ where
         <T as Archetype<Sqlite>>::list(&self.pool, condition)
     }
 
-    fn get<'pool, 'entity, T>(
-        &'pool self,
-        entity: &'entity Entity,
-    ) -> impl Future<Output = Result<T, sqlx::Error>> + Send + 'entity
+    fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
-        'pool: 'entity,
     {
         <T as Archetype<Sqlite>>::get(&self.pool, entity)
     }
