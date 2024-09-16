@@ -37,7 +37,7 @@ async fn main() {
     let backend: SqliteBackend<Uuid> = SqliteBackend::new(db);
 
     backend
-        .init::<(FriendlyName, Position, Parent)>()
+        .register::<(FriendlyName, Position, Parent)>()
         .await
         .unwrap();
 

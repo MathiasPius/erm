@@ -46,7 +46,7 @@ where
         + Send
         + 'static,
 {
-    fn init<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
+    fn register<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
     where
         T: Archetype<DB>;
 

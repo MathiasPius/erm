@@ -32,7 +32,7 @@ where
         + 'static,
     for<'entity> &'entity Entity: Send,
 {
-    fn init<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
+    fn register<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
     where
         T: Archetype<MySql>,
     {
