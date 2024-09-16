@@ -58,7 +58,7 @@ pub fn update_component(table: &str, character: char, data: &DataStruct) -> Stri
     format!("update {table} set {field_updates} where entity = {character}1")
 }
 
-pub fn delete_component(table: &str, character: char) -> String {
+pub fn remove_component(table: &str, character: char) -> String {
     format!("delete from {table} where entity = {character}1")
 }
 
@@ -125,17 +125,17 @@ pub fn update_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
     }
 }
 
-pub fn delete_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
+pub fn remove_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
     let sub_archetypes = fields.iter().map(|field| {
         let typename = &field.ty;
 
         quote! {
-            <#typename as ::erm::archetype::Archetype<#database>>::delete_archetype(query);
+            <#typename as ::erm::archetype::Archetype<#database>>::remove_archetype(query);
         }
     });
 
     quote! {
-        fn delete_archetype<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+        fn remove_archetype<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {

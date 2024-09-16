@@ -72,7 +72,7 @@
 //! // name: Position 2 at -10000,-5
 //!
 //! // Remove the DisplayName component from our pos2 entity.
-//! backend.delete::<DisplayName>(&pos2).await;
+//! backend.remove::<DisplayName>(&pos2).await;
 //!
 //!
 //! // Fetch the name of our first position.

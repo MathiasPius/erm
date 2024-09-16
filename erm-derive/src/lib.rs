@@ -4,7 +4,7 @@ mod serde;
 
 use proc_macro2::{Ident, TokenStream};
 use queries::{
-    create_archetype_component_tables, delete_archetype, insert_archetype, select_query,
+    create_archetype_component_tables, remove_archetype, insert_archetype, select_query,
     update_archetype,
 };
 use quote::{quote, TokenStreamExt};
@@ -45,14 +45,14 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
         let insert_component = queries::insert_component(&table, character, &data);
         let update_component = queries::update_component(&table, character, &data);
-        let delete_component = queries::delete_component(&table, character);
+        let remove_component = queries::remove_component(&table, character);
         let create_component_table = queries::create_component_table(&database, &table, &data);
 
         quote! {
             impl ::erm::component::Component<#database> for #component_name {
                 const INSERT: &'static str = #insert_component;
                 const UPDATE: &'static str = #update_component;
-                const DELETE: &'static str = #delete_component;
+                const DELETE: &'static str = #remove_component;
 
                 fn table() -> &'static str {
                     #table
@@ -119,7 +119,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
         let insert_archetype = insert_archetype(&database, &data.fields);
         let update_archetype = update_archetype(&database, &data.fields);
-        let delete_archetype = delete_archetype(&database, &data.fields);
+        let remove_archetype = remove_archetype(&database, &data.fields);
 
         let create_archetype_component_tables =
             create_archetype_component_tables(&database, &data.fields);
@@ -131,7 +131,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
                 #insert_archetype
                 #update_archetype
-                #delete_archetype
+                #remove_archetype
 
                 #select_query
 

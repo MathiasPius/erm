@@ -78,10 +78,10 @@ where
         <T as Archetype<Postgres>>::update(&components, &self.pool, entity)
     }
 
-    fn delete<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<Postgres> + Unpin + Send + 'static,
     {
-        <T as Archetype<Postgres>>::delete(&self.pool, entity)
+        <T as Archetype<Postgres>>::remove(&self.pool, entity)
     }
 }

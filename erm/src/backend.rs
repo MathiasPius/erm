@@ -80,7 +80,7 @@ where
     where
         T: Archetype<DB> + Unpin + Send + 'static;
 
-    fn delete<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<DB> + Unpin + Send + 'static;
 

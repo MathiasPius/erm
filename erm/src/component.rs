@@ -54,7 +54,7 @@ pub trait Component<DB: Database>: Sized {
         query.query(Self::UPDATE, move |query| self.serialize_fields(query))
     }
 
-    fn delete_component<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    fn remove_component<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
     where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {

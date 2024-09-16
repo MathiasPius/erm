@@ -78,10 +78,10 @@ where
         <T as Archetype<MySql>>::update(&components, &self.pool, entity)
     }
 
-    fn delete<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<MySql> + Unpin + Send + 'static,
     {
-        <T as Archetype<MySql>>::delete(&self.pool, entity)
+        <T as Archetype<MySql>>::remove(&self.pool, entity)
     }
 }

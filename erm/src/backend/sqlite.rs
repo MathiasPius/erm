@@ -78,10 +78,10 @@ where
         <T as Archetype<Sqlite>>::update(&components, &self.pool, entity)
     }
 
-    fn delete<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
     {
-        <T as Archetype<Sqlite>>::delete(&self.pool, entity)
+        <T as Archetype<Sqlite>>::remove(&self.pool, entity)
     }
 }

@@ -83,7 +83,7 @@ async fn main() {
     assert_eq!(children.len(), 1);
     println!("{children:#?}");
 
-    backend.delete::<Person>(&charlie).await;
+    backend.remove::<Person>(&charlie).await;
 
     let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
         .collect()
