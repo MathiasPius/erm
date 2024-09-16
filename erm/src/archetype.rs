@@ -296,7 +296,7 @@ macro_rules! expand_inner_join {
 
 #[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 macro_rules! impl_compound_for_db{
-    ($db:ty, $($list:ident),*) => {
+    ($db:ty, $($list:ident:$index:tt),*) => {
         impl<$($list),*> Archetype<$db> for ($($list,)*)
         where
             $($list: Archetype<$db>,)*
@@ -320,9 +320,7 @@ macro_rules! impl_compound_for_db{
             {
                 $(
                     {
-                        #[allow(unused)]
-                        const $list: () = ();
-                        self.${index()}.insert_archetype(query);
+                        self.$index.insert_archetype(query);
                     }
                 )*
             }
@@ -333,9 +331,7 @@ macro_rules! impl_compound_for_db{
             {
                 $(
                     {
-                        #[allow(unused)]
-                        const $list: () = ();
-                        self.${index()}.update_archetype(query);
+                        self.$index.update_archetype(query);
                     }
                 )*
             }
@@ -364,7 +360,7 @@ macro_rules! impl_compound_for_db{
                 $(
                     #[allow(unused)]
                     const $list: () = ();
-                    let query = self.${index()}.serialize_components(query);
+                    let query = self.$index.serialize_components(query);
                 )*
 
                 query
@@ -384,22 +380,21 @@ macro_rules! impl_compound_for_db{
 }
 
 macro_rules! impl_compound {
-    ($($list:ident),*) => {
+    ($($list:ident:$index:tt),*) => {
         #[cfg(feature = "sqlite")]
-        impl_compound_for_db!(sqlx::Sqlite, $($list),*);
+        impl_compound_for_db!(sqlx::Sqlite, $($list:$index),*);
         #[cfg(feature = "postgres")]
-        impl_compound_for_db!(sqlx::Postgres, $($list),*);
+        impl_compound_for_db!(sqlx::Postgres, $($list:$index),*);
         #[cfg(feature = "mysql")]
-        impl_compound_for_db!(sqlx::MySql, $($list),*);
+        impl_compound_for_db!(sqlx::MySql, $($list:$index),*);
     };
 }
 
-impl_compound!(A, B);
-impl_compound!(A, B, C);
-impl_compound!(A, B, C, D);
-impl_compound!(A, B, C, D, E);
-impl_compound!(A, B, C, D, E, F);
-impl_compound!(A, B, C, D, E, F, G);
-impl_compound!(A, B, C, D, E, F, G, H);
-impl_compound!(A, B, C, D, E, F, G, H, I);
-impl_compound!(A, B, C, D, E, F, G, H, I, J);
+impl_compound!(A:0, B:1);
+impl_compound!(A:0, B:1, C:2);
+impl_compound!(A:0, B:1, C:2, D:3);
+impl_compound!(A:0, B:1, C:2, D:3, E:4);
+impl_compound!(A:0, B:1, C:2, D:3, E:4, F:5);
+impl_compound!(A:0, B:1, C:2, D:3, E:4, F:5, G:6);
+impl_compound!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7);
+impl_compound!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, I:8);

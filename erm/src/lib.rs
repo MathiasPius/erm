@@ -1,5 +1,3 @@
-#![feature(macro_metavar_expr)]
-
 pub mod archetype;
 pub mod backend;
 pub mod component;
