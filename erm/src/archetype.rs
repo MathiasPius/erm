@@ -46,7 +46,7 @@ pub trait Archetype<DB: Database>: Sized {
     ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>>
     where
         Self: Unpin + Send,
-        Cond: Condition<Entity>,
+        Cond: for<'c> Condition<'c, DB>,
         for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
         for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
         for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,

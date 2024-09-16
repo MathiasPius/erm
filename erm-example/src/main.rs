@@ -1,6 +1,5 @@
 use erm::{
     backend::{Backend, SqliteBackend},
-    condition::Equality,
     Archetype, Component,
 };
 use futures::StreamExt as _;
@@ -64,7 +63,7 @@ async fn main() {
         ))
         .await;
 
-    let charlie = backend
+    let _charlie = backend
         .spawn(&(
             FriendlyName {
                 friendly_name: "Charlie".to_string(),
@@ -80,7 +79,8 @@ async fn main() {
         parent: Parent,
     }
 
-    let mut children = Box::pin(backend.list::<Person, _>(Equality::new("parent", bob)));
+    use erm::Reflect;
+    let mut children = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)));
 
     while let Some(child) = children.next().await {
         println!("{:#?}", child);

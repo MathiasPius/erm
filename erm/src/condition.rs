@@ -1,135 +1,130 @@
-use std::marker::PhantomData;
-
 use sqlx::{query::QueryAs, Database};
 
-pub trait Condition<Entity>: Sized {
+pub trait Condition<'q, DB>: Sized
+where
+    DB: Database,
+{
     fn serialize(&self) -> String;
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
-    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
-    where
-        DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q;
+    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>;
 
-    fn and<B: Condition<Entity>>(self, other: B) -> And<Entity, Self, B> {
+    fn and<B: Condition<'q, DB>>(self, other: B) -> And<Self, B> {
         And::new(self, other)
     }
 
-    fn or<B: Condition<Entity>>(self, other: B) -> Or<Entity, Self, B> {
+    fn or<B: Condition<'q, DB>>(self, other: B) -> Or<Self, B> {
         Or::new(self, other)
     }
 }
 
 pub struct All;
 
-impl<Entity> Condition<Entity> for All {
+impl<'q, DB: Database> Condition<'q, DB> for All {
     fn serialize(&self) -> String {
         "1 == 1".to_string()
     }
 
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
     where
         DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
     {
         query
     }
 }
 
-pub struct Equality<Entity> {
+pub struct Equality<Parameter> {
     column: &'static str,
-    entity: Entity,
+    parameter: Parameter,
 }
 
-impl<Entity> Equality<Entity> {
-    pub fn new(column: &'static str, value: Entity) -> Self {
+impl<Parameter> Equality<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
         Self {
             column,
-            entity: value,
+            parameter: value,
         }
     }
 }
 
-impl<Entity> Condition<Entity> for Equality<Entity> {
+impl<'q, DB: Database, Parameter> Condition<'q, DB> for Equality<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
     fn serialize(&self) -> String {
         format!("{} == ?", self.column)
     }
 
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
     where
         DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
     {
-        query.bind(self.entity)
+        query.bind(self.parameter)
     }
 }
 
-pub struct Inequality<Entity> {
+pub struct Inequality<Parameter> {
     column: &'static str,
-    entity: Entity,
+    parameter: Parameter,
 }
 
-impl<Entity> Inequality<Entity> {
-    pub fn new(column: &'static str, value: Entity) -> Self {
+impl<Parameter> Inequality<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
         Self {
             column,
-            entity: value,
+            parameter: value,
         }
     }
 }
 
-impl<Entity> Condition<Entity> for Inequality<Entity> {
+impl<'q, DB: Database, Parameter> Condition<'q, DB> for Inequality<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
     fn serialize(&self) -> String {
         format!("{} <> ?", self.column)
     }
 
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
     where
         DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
     {
-        query.bind(self.entity)
+        query.bind(self.parameter)
     }
 }
 
-pub struct And<Entity, A: Condition<Entity>, B: Condition<Entity>> {
+pub struct And<A, B> {
     a: A,
     b: B,
-    _entity: PhantomData<Entity>,
 }
 
-impl<Entity, A: Condition<Entity>, B: Condition<Entity>> And<Entity, A, B> {
-    pub fn new(a: A, b: B) -> Self {
-        Self {
-            a,
-            b,
-            _entity: PhantomData,
-        }
+impl<A, B> And<A, B> {
+    pub const fn new(a: A, b: B) -> Self {
+        Self { a, b }
     }
 }
 
-impl<Entity, A: Condition<Entity>, B: Condition<Entity>> Condition<Entity> for And<Entity, A, B> {
+impl<'q, DB: Database, A: Condition<'q, DB>, B: Condition<'q, DB>> Condition<'q, DB> for And<A, B> {
     fn serialize(&self) -> String {
         format!("({} and {})", self.a.serialize(), self.b.serialize())
     }
 
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
     where
         DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
     {
         let query = self.a.bind(query);
         let query = self.b.bind(query);
@@ -137,35 +132,28 @@ impl<Entity, A: Condition<Entity>, B: Condition<Entity>> Condition<Entity> for A
         query
     }
 }
-
-pub struct Or<Entity, A: Condition<Entity>, B: Condition<Entity>> {
+pub struct Or<A, B> {
     a: A,
     b: B,
-    _entity: PhantomData<Entity>,
 }
 
-impl<Entity, A: Condition<Entity>, B: Condition<Entity>> Or<Entity, A, B> {
-    pub fn new(a: A, b: B) -> Self {
-        Self {
-            a,
-            b,
-            _entity: PhantomData,
-        }
+impl<A, B> Or<A, B> {
+    pub const fn new(a: A, b: B) -> Self {
+        Self { a, b }
     }
 }
 
-impl<Entity, A: Condition<Entity>, B: Condition<Entity>> Condition<Entity> for Or<Entity, A, B> {
+impl<'q, DB: Database, A: Condition<'q, DB>, B: Condition<'q, DB>> Condition<'q, DB> for Or<A, B> {
     fn serialize(&self) -> String {
         format!("({} or {})", self.a.serialize(), self.b.serialize())
     }
 
-    fn bind<'q, DB, T>(
+    fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
     where
         DB: Database,
-        Entity: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
     {
         let query = self.a.bind(query);
         let query = self.b.bind(query);

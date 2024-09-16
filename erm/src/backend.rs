@@ -69,7 +69,7 @@ where
     fn list<T, Cond>(&self, cond: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<DB> + Unpin + Send + 'static,
-        Cond: Condition<Entity>;
+        Cond: for<'c> Condition<'c, DB>;
 
     fn list_all<T>(&self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where

@@ -1,4 +1,5 @@
 mod queries;
+mod reflect;
 mod serde;
 
 use proc_macro2::{Ident, TokenStream};
@@ -6,6 +7,7 @@ use queries::{
     create_archetype_component_tables, insert_archetype, select_query, update_archetype,
 };
 use quote::{quote, TokenStreamExt};
+use reflect::reflect_component;
 use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
 
@@ -75,6 +77,10 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     #[cfg(feature = "mysql")]
     implementations.append_all(implementation(Ident::new("MySql", data.struct_token.span)));
+
+    let reflection_impl = reflect_component(&component_name, &data.fields);
+
+    implementations.append_all(reflection_impl);
 
     implementations.into()
 }

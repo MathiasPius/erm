@@ -41,7 +41,7 @@ where
     fn list<T, Cond>(&self, condition: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<Sqlite> + Unpin + Send + 'static,
-        Cond: Condition<Entity>,
+        Cond: for<'c> Condition<'c, Sqlite>,
     {
         <T as Archetype<Sqlite>>::list(&self.pool, condition)
     }
