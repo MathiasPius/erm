@@ -63,7 +63,7 @@ async fn main() {
         ))
         .await;
 
-    let _charlie = backend
+    let charlie = backend
         .spawn(&(
             FriendlyName {
                 friendly_name: "Charlie".to_string(),
@@ -80,9 +80,18 @@ async fn main() {
     }
 
     use erm::Reflect;
-    let mut children = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)));
+    let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
+        .collect()
+        .await;
 
-    while let Some(child) = children.next().await {
-        println!("{:#?}", child);
-    }
+    assert_eq!(children.len(), 1);
+    println!("{children:#?}");
+
+    backend.delete::<Person>(&charlie).await;
+
+    let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
+        .collect()
+        .await;
+
+    assert!(children.is_empty());
 }

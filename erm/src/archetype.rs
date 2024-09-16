@@ -31,6 +31,10 @@ pub trait Archetype<DB: Database>: Sized {
     ) where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 
+    fn delete_archetype<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
+
     fn list_statement() -> impl CommonTableExpression;
 
     fn get_statement() -> impl CommonTableExpression {
@@ -141,6 +145,32 @@ pub trait Archetype<DB: Database>: Sized {
         }
     }
 
+    fn delete<'query, Entity>(
+        pool: &'query Pool<DB>,
+        entity: Entity,
+    ) -> impl Future<Output = ()> + Send + 'query
+    where
+        Self: Send,
+        for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
+            IntoArguments<'connection, DB> + Send,
+        for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
+            Executor<'connection, Database = DB>,
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
+    {
+        let mut deletes = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
+
+        <Self as Archetype<DB>>::delete_archetype(&mut deletes);
+
+        async move {
+            let mut tx = pool.begin().await.unwrap();
+            for query in deletes.queries {
+                query.execute(&mut *tx).await.unwrap();
+            }
+
+            tx.commit().await.unwrap();
+        }
+    }
+
     fn serialize_components<'q>(
         &'q self,
         query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
@@ -184,6 +214,13 @@ where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         <Self as Component<DB>>::update_component(&self, query);
+    }
+
+    fn delete_archetype<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+    {
+        <Self as Component<DB>>::delete_component(query);
     }
 
     fn list_statement() -> impl CommonTableExpression {
@@ -279,6 +316,19 @@ macro_rules! impl_compound_for_db{
                         #[allow(unused)]
                         const $list: () = ();
                         self.${index()}.update_archetype(query);
+                    }
+                )*
+            }
+
+            fn delete_archetype<'query, Entity>(
+                query: &mut EntityPrefixedQuery<'query, $db, Entity>,
+            ) where
+                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
+            {
+                $(
+                    {
+                        #[allow(unused)]
+                        <$list as Archetype<$db>>::delete_archetype(query);
                     }
                 )*
             }

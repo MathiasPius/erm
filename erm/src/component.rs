@@ -23,6 +23,7 @@ impl<DB: Database> ColumnDefinition<DB> {
 pub trait Component<DB: Database>: std::fmt::Debug + Sized {
     const INSERT: &'static str;
     const UPDATE: &'static str;
+    const DELETE: &'static str;
 
     fn table() -> &'static str;
 
@@ -51,6 +52,13 @@ pub trait Component<DB: Database>: std::fmt::Debug + Sized {
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         query.query(Self::UPDATE, move |query| self.serialize_fields(query))
+    }
+
+    fn delete_component<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    where
+        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+    {
+        query.query(Self::DELETE, |query| query)
     }
 
     fn create_component_table<'pool, Entity>(

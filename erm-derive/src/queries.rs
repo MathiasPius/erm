@@ -58,6 +58,10 @@ pub fn update_component(table: &str, character: char, data: &DataStruct) -> Stri
     format!("update {table} set {field_updates} where entity = {character}1")
 }
 
+pub fn delete_component(table: &str, character: char) -> String {
+    format!("delete from {table} where entity = {character}1")
+}
+
 pub fn create_archetype_component_tables(database: &TokenStream, fields: &Fields) -> TokenStream {
     let sub_archetypes = fields.iter().map(|field| {
         let typename = &field.ty;
@@ -113,6 +117,25 @@ pub fn update_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
 
     quote! {
         fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
+        where
+            Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
+        {
+            #(#sub_archetypes)*
+        }
+    }
+}
+
+pub fn delete_archetype(database: &TokenStream, fields: &Fields) -> TokenStream {
+    let sub_archetypes = fields.iter().map(|field| {
+        let typename = &field.ty;
+
+        quote! {
+            <#typename as ::erm::Archetype<#database>>::delete_archetype(query);
+        }
+    });
+
+    quote! {
+        fn delete_archetype<'query, Entity>(query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {

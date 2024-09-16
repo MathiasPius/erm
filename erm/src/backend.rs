@@ -66,6 +66,10 @@ where
     where
         T: Archetype<DB> + Unpin + Send + 'static;
 
+    fn delete<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    where
+        T: Archetype<DB> + Unpin + Send + 'static;
+
     fn list<T, Cond>(&self, cond: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
         T: Archetype<DB> + Unpin + Send + 'static,
