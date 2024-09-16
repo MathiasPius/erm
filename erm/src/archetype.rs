@@ -247,6 +247,7 @@ where
     }
 }
 
+#[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 macro_rules! expand_inner_join {
     ($db:ty, $first:ident, $second:ident) => {
         crate::cte::InnerJoin {
@@ -275,6 +276,7 @@ macro_rules! expand_inner_join {
     };
 }
 
+#[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 macro_rules! impl_compound_for_db{
     ($db:ty, $($list:ident),*) => {
         impl<$($list),*> Archetype<$db> for ($($list,)*)
