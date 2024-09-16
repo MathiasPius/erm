@@ -2,6 +2,8 @@ use std::future::Future;
 
 use futures::Stream;
 use sqlx::Database;
+
+#[cfg(feature = "uuid")]
 use uuid::Uuid;
 
 use crate::{
@@ -9,14 +11,17 @@ use crate::{
     condition::{All, Condition},
 };
 
+#[cfg(feature = "sqlite")]
 mod sqlite;
 
+#[cfg(feature = "sqlite")]
 pub use sqlite::SqliteBackend;
 
 pub trait GenerateNew {
     fn generate_new() -> Self;
 }
 
+#[cfg(feature = "uuid")]
 impl GenerateNew for Uuid {
     fn generate_new() -> Self {
         Uuid::new_v4()

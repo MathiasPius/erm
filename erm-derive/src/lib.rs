@@ -24,6 +24,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let component_name = derive.ident;
     let table = component_name.to_string().to_lowercase();
 
+    #[allow(unused)]
     let implementation = |database: Ident| {
         let database = quote! {::sqlx::#database};
 
@@ -99,6 +100,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     let archetype_name = derive.ident;
 
+    #[allow(unused)]
     let implementation = |database: Ident| {
         let database = quote! {::sqlx::#database};
 
@@ -133,6 +135,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         }
     };
 
+    #[allow(unused_mut)]
     let mut implementations = TokenStream::new();
     #[cfg(feature = "sqlite")]
     implementations.append_all(implementation(Ident::new("Sqlite", data.struct_token.span)));

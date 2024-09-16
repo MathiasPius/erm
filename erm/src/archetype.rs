@@ -7,7 +7,7 @@ use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
 use crate::{
     component::Component,
     condition::Condition,
-    cte::{CommonTableExpression, Filter, InnerJoin, Select},
+    cte::{CommonTableExpression, Filter, Select},
     entity::EntityPrefixedQuery,
     row::{OffsetRow, Rowed},
 };
@@ -249,7 +249,7 @@ where
 
 macro_rules! expand_inner_join {
     ($db:ty, $first:ident, $second:ident) => {
-        InnerJoin {
+        crate::cte::InnerJoin {
             left: (
                 Box::new(<$first as Archetype<$db>>::list_statement()),
                 "entity".to_string(),
@@ -262,7 +262,7 @@ macro_rules! expand_inner_join {
     };
 
     ($db:ty, $first:ident, $($list:ident),*) => {
-        InnerJoin {
+        crate::cte::InnerJoin {
             left: (
                 Box::new(<$first as Archetype<$db>>::list_statement()),
                 "entity".to_string(),
