@@ -20,7 +20,7 @@ impl<DB: Database> ColumnDefinition<DB> {
 }
 
 /// Describes reading and writing from a Component-specific Table.
-pub trait Component<DB: Database>: std::fmt::Debug + Sized {
+pub trait Component<DB: Database>: Sized {
     const INSERT: &'static str;
     const UPDATE: &'static str;
     const DELETE: &'static str;
