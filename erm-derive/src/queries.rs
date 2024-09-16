@@ -67,7 +67,7 @@ pub fn create_archetype_component_tables(database: &TokenStream, fields: &Fields
         let typename = &field.ty;
 
         quote! {
-            <#typename as ::erm::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
+            <#typename as ::erm::archetype::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
         }
     });
 
@@ -91,12 +91,12 @@ pub fn insert_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
         let typename = &field.ty;
 
         quote! {
-            <#typename as ::erm::Archetype<#database>>::insert_archetype(&self.#name, query);
+            <#typename as ::erm::archetype::Archetype<#database>>::insert_archetype(&self.#name, query);
         }
     });
 
     quote! {
-        fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
+        fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {
@@ -111,12 +111,12 @@ pub fn update_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
         let typename = &field.ty;
 
         quote! {
-            <#typename as ::erm::Archetype<#database>>::update_archetype(&self.#name, query);
+            <#typename as ::erm::archetype::Archetype<#database>>::update_archetype(&self.#name, query);
         }
     });
 
     quote! {
-        fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
+        fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {
@@ -130,12 +130,12 @@ pub fn delete_archetype(database: &TokenStream, fields: &Fields) -> TokenStream 
         let typename = &field.ty;
 
         quote! {
-            <#typename as ::erm::Archetype<#database>>::delete_archetype(query);
+            <#typename as ::erm::archetype::Archetype<#database>>::delete_archetype(query);
         }
     });
 
     quote! {
-        fn delete_archetype<'query, Entity>(query: &mut ::erm::EntityPrefixedQuery<'query, #database, Entity>)
+        fn delete_archetype<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
         where
             Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
         {
@@ -196,7 +196,7 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
 
     let first_item = &fields.next().unwrap().ty;
     let first = quote! {
-        let join = <#first_item as ::erm::Archetype<#database>>::list_statement();
+        let join = <#first_item as ::erm::archetype::Archetype<#database>>::list_statement();
     };
 
     let list_statements = fields.map(|field| {
@@ -209,7 +209,7 @@ pub fn select_query(database: &TokenStream, fields: &Fields) -> TokenStream {
                     "entity".to_string(),
                 ),
                 right: (
-                    Box::new(<#field as ::erm::Archetype<#database>>::list_statement()),
+                    Box::new(<#field as ::erm::archetype::Archetype<#database>>::list_statement()),
                     "entity".to_string(),
                 ),
             }

@@ -32,7 +32,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             let typename = &field.ty;
 
             quote! {
-                ::erm::ColumnDefinition::<#database> {
+                ::erm::component::ColumnDefinition::<#database> {
                     name: #name,
                     type_info: <#typename as ::sqlx::Type<#database>>::type_info(),
                 }
@@ -48,7 +48,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let create_component_table = queries::create_component_table(&database, &table, &data);
 
         quote! {
-            impl ::erm::Component<#database> for #component_name {
+            impl ::erm::component::Component<#database> for #component_name {
                 const INSERT: &'static str = #insert_component;
                 const UPDATE: &'static str = #update_component;
                 const DELETE: &'static str = #delete_component;
@@ -57,7 +57,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
                     #table
                 }
 
-                fn columns() -> Vec<::erm::ColumnDefinition::<#database>> {
+                fn columns() -> Vec<::erm::component::ColumnDefinition::<#database>> {
                     vec![#(#columns,)*]
                 }
 
@@ -117,7 +117,7 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             create_archetype_component_tables(&database, &data.fields);
 
         quote! {
-            impl ::erm::Archetype<#database> for #archetype_name
+            impl ::erm::archetype::Archetype<#database> for #archetype_name
             {
                 #create_archetype_component_tables
 

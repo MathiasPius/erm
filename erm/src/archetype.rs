@@ -5,11 +5,11 @@ use futures::Stream;
 use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 use crate::{
+    component::Component,
     condition::Condition,
     cte::{CommonTableExpression, Filter, InnerJoin, Select},
     entity::EntityPrefixedQuery,
-    row::Rowed,
-    Component, OffsetRow,
+    row::{OffsetRow, Rowed},
 };
 
 pub trait Archetype<DB: Database>: Sized {

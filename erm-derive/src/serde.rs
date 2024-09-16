@@ -25,7 +25,7 @@ pub fn deserialize_fields(
     });
 
     quote! {
-        fn deserialize_fields(row: &mut ::erm::OffsetRow<<#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {
+        fn deserialize_fields(row: &mut ::erm::row::OffsetRow<<#database as ::sqlx::Database>::Row>) -> Result<Self, ::sqlx::Error> {
             #(#unpack;)*
 
             let component = #component_name {
@@ -70,7 +70,7 @@ pub fn deserialize_components(
             let typename = &field.ty;
 
             quote! {
-                let #name = <#typename as ::erm::Archetype<#database>>::deserialize_components(row);
+                let #name = <#typename as ::erm::archetype::Archetype<#database>>::deserialize_components(row);
             }
         })
         .collect();
@@ -88,7 +88,7 @@ pub fn deserialize_components(
 
     quote! {
         fn deserialize_components(
-            row: &mut ::erm::OffsetRow<<#database as ::sqlx::Database>::Row>,
+            row: &mut ::erm::row::OffsetRow<<#database as ::sqlx::Database>::Row>,
         ) -> Result<Self, ::sqlx::Error> {
             #(#unpack;)*
 

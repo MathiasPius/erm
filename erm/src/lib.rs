@@ -1,19 +1,21 @@
 #![feature(macro_metavar_expr)]
 
-mod archetype;
+pub mod archetype;
 pub mod backend;
-mod component;
+pub mod component;
 pub mod condition;
 pub mod cte;
-mod entity;
-mod reflect;
+pub mod entity;
+pub mod reflect;
 pub mod row;
 
-pub use archetype::Archetype;
-pub use component::{ColumnDefinition, Component};
-pub use entity::EntityPrefixedQuery;
-pub use reflect::{Reflect, ReflectedColumn};
-pub use row::OffsetRow;
+pub mod prelude {
+    #[cfg(feature = "derive")]
+    pub use erm_derive::*;
 
-#[cfg(feature = "derive")]
-pub use erm_derive::*;
+    pub use crate::archetype::Archetype;
+    pub use crate::backend::*;
+    pub use crate::component::{ColumnDefinition, Component};
+    pub use crate::condition;
+    pub use crate::reflect::Reflect;
+}

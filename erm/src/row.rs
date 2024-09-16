@@ -1,7 +1,6 @@
+use crate::archetype::Archetype;
 use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row};
 use tracing::trace;
-
-use crate::Archetype;
 
 pub struct OffsetRow<'r, R: Row> {
     pub row: &'r R,

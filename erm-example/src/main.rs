@@ -1,7 +1,4 @@
-use erm::{
-    backend::{Backend, SqliteBackend},
-    Archetype, Component,
-};
+use erm::prelude::*;
 use futures::StreamExt as _;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use uuid::Uuid;
@@ -79,7 +76,6 @@ async fn main() {
         parent: Parent,
     }
 
-    use erm::Reflect;
     let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
         .collect()
         .await;

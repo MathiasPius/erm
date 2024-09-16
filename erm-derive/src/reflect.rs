@@ -10,7 +10,7 @@ pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream
         let typename = &field.ty;
 
         quote! {
-            pub #name: ::erm::ReflectedColumn<#typename>
+            pub #name: ::erm::reflect::ReflectedColumn<#typename>
         }
     });
 
@@ -19,7 +19,7 @@ pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream
         let stringified = name.to_string();
 
         quote! {
-            #name: ::erm::ReflectedColumn::new(#stringified)
+            #name: ::erm::reflect::ReflectedColumn::new(#stringified)
         }
     });
 
@@ -36,7 +36,7 @@ pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream
             }
         }
 
-        impl ::erm::Reflect for #component_name {
+        impl ::erm::reflect::Reflect for #component_name {
             type ReflectionType = #reflection_name;
             const FIELDS: Self::ReflectionType = #reflection_name::new();
         }

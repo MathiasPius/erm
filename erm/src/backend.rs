@@ -5,8 +5,8 @@ use sqlx::Database;
 use uuid::Uuid;
 
 use crate::{
+    archetype::Archetype,
     condition::{All, Condition},
-    Archetype,
 };
 
 mod sqlite;

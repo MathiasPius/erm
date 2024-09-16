@@ -2,7 +2,7 @@ use std::future::Future;
 
 use sqlx::{query::Query, Database, Pool};
 
-use crate::{entity::EntityPrefixedQuery, OffsetRow};
+use crate::{entity::EntityPrefixedQuery, row::OffsetRow};
 
 pub struct ColumnDefinition<DB: Database> {
     pub name: &'static str,

@@ -3,7 +3,8 @@ use std::{future::Future, marker::PhantomData};
 use futures::Stream;
 use sqlx::{Pool, Sqlite};
 
-use crate::{condition::Condition, Archetype};
+use crate::archetype::Archetype;
+use crate::condition::Condition;
 
 use super::Backend;
 
