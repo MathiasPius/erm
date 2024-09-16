@@ -12,6 +12,21 @@ use crate::{
     row::{OffsetRow, Rowed},
 };
 
+pub trait DatabasePlaceholder {
+    const PLACEHOLDER: char = '?';
+}
+
+#[cfg(feature = "sqlite")]
+impl DatabasePlaceholder for sqlx::Sqlite {}
+
+#[cfg(feature = "mysql")]
+impl DatabasePlaceholder for sqlx::MySql {}
+
+#[cfg(feature = "postgres")]
+impl DatabasePlaceholder for sqlx::Postgres {
+    const PLACEHOLDER: char = '$';
+}
+
 pub trait Archetype<DB: Database>: Sized {
     fn create_component_tables<'a, Entity>(
         pool: &'a Pool<DB>,
@@ -54,12 +69,13 @@ pub trait Archetype<DB: Database>: Sized {
         for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
         for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
         for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
+        DB: DatabasePlaceholder,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
         stream! {
             let sql = format!(
                 "{} where {}",
-                <Self as Archetype<DB>>::list_statement().serialize(),
+                <Self as Archetype<DB>>::list_statement().serialize(<DB as DatabasePlaceholder>::PLACEHOLDER),
                 condition.serialize()
             );
 
@@ -80,10 +96,12 @@ pub trait Archetype<DB: Database>: Sized {
         for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
         for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
         for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
+        DB: DatabasePlaceholder,
         usize: ColumnIndex<<DB as sqlx::Database>::Row>,
     {
         async move {
-            let sql = <Self as Archetype<DB>>::get_statement().serialize();
+            let sql = <Self as Archetype<DB>>::get_statement()
+                .serialize(<DB as DatabasePlaceholder>::PLACEHOLDER);
             let result: Rowed<Entity, Self> =
                 sqlx::query_as(&sql).bind(entity).fetch_one(pool).await?;
 

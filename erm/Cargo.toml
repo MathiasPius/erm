@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
 derive = ["dep:erm-derive"]
 
 sqlite = ["sqlx/sqlite", "erm-derive/sqlite"]

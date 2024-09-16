@@ -25,7 +25,7 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let table = component_name.to_string().to_lowercase();
 
     #[allow(unused)]
-    let implementation = |database: Ident| {
+    let implementation = |database: Ident, character: char| {
         let database = quote! {::sqlx::#database};
 
         let columns = data.fields.iter().map(|field| {
@@ -43,9 +43,9 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         let deserialize_fields = deserialize_fields(&database, &component_name, &data.fields);
         let serialize_fields = serialize_fields(&database, &data.fields);
 
-        let insert_component = queries::insert_component(&table, '?', &data);
-        let update_component = queries::update_component(&table, '?', &data);
-        let delete_component = queries::delete_component(&table, '?');
+        let insert_component = queries::insert_component(&table, character, &data);
+        let update_component = queries::update_component(&table, character, &data);
+        let delete_component = queries::delete_component(&table, character);
         let create_component_table = queries::create_component_table(&database, &table, &data);
 
         quote! {
@@ -71,16 +71,22 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     let mut implementations = TokenStream::new();
     #[cfg(feature = "sqlite")]
-    implementations.append_all(implementation(Ident::new("Sqlite", data.struct_token.span)));
+    implementations.append_all(implementation(
+        Ident::new("Sqlite", data.struct_token.span),
+        '?',
+    ));
 
     #[cfg(feature = "postgres")]
-    implementations.append_all(implementation(Ident::new(
-        "Postgres",
-        data.struct_token.span,
-    )));
+    implementations.append_all(implementation(
+        Ident::new("Postgres", data.struct_token.span),
+        '$',
+    ));
 
     #[cfg(feature = "mysql")]
-    implementations.append_all(implementation(Ident::new("MySql", data.struct_token.span)));
+    implementations.append_all(implementation(
+        Ident::new("MySql", data.struct_token.span),
+        '?',
+    ));
 
     let reflection_impl = reflect_component(&component_name, &data.fields);
 

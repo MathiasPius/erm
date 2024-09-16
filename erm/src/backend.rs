@@ -13,9 +13,18 @@ use crate::{
 
 #[cfg(feature = "sqlite")]
 mod sqlite;
-
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteBackend;
+
+#[cfg(feature = "postgres")]
+mod postgres;
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresBackend;
+
+#[cfg(feature = "mysql")]
+mod mysql;
+#[cfg(feature = "mysql")]
+pub use mysql::MySqlBackend;
 
 pub trait GenerateNew {
     fn generate_new() -> Self;

@@ -4,7 +4,7 @@ pub type Column = String;
 pub trait CommonTableExpression: 'static {
     fn primary_table(&self) -> Table;
 
-    fn serialize(&self) -> String {
+    fn serialize(&self, placeholder: char) -> String {
         let columns: String = self
             .columns()
             .into_iter()
@@ -30,7 +30,7 @@ pub trait CommonTableExpression: 'static {
         let mut wheres = self
             .wheres()
             .into_iter()
-            .map(|(table, column)| format!("{table}.{column} = ?"))
+            .map(|(table, column)| format!("{table}.{column} = {placeholder}"))
             .collect::<Vec<_>>()
             .join("\n      and ");
         if !wheres.is_empty() {

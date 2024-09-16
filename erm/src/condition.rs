@@ -1,5 +1,7 @@
 use sqlx::{query::QueryAs, Database};
 
+use crate::archetype::DatabasePlaceholder;
+
 pub trait Condition<'q, DB>: Sized
 where
     DB: Database,
@@ -51,12 +53,16 @@ impl<Parameter> Equality<Parameter> {
     }
 }
 
-impl<'q, DB: Database, Parameter> Condition<'q, DB> for Equality<Parameter>
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for Equality<Parameter>
 where
     Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
 {
     fn serialize(&self) -> String {
-        format!("{} == ?", self.column)
+        format!(
+            "{} == {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
     }
 
     fn bind<T>(
@@ -84,12 +90,16 @@ impl<Parameter> Inequality<Parameter> {
     }
 }
 
-impl<'q, DB: Database, Parameter> Condition<'q, DB> for Inequality<Parameter>
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for Inequality<Parameter>
 where
     Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
 {
     fn serialize(&self) -> String {
-        format!("{} <> ?", self.column)
+        format!(
+            "{} <> {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
     }
 
     fn bind<T>(
