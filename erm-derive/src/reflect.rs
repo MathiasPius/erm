@@ -2,6 +2,8 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Fields;
 
+use crate::attributes::ComponentAttributes;
+
 pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream {
     let reflection_name = Ident::new(&format!("Reflected{component_name}"), component_name.span());
 
@@ -9,8 +11,16 @@ pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream
         let name = field.ident.as_ref().unwrap();
         let typename = &field.ty;
 
-        quote! {
-            pub #name: ::erm::reflect::ReflectedColumn<#typename>
+        let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
+
+        if let Some(storage_type) = attributes.store_as {
+            quote! {
+                pub #name: ::erm::reflect::ReflectedColumn<#storage_type>
+            }
+        } else {
+            quote! {
+                pub #name: ::erm::reflect::ReflectedColumn<#typename>
+            }
         }
     });
 

@@ -1,10 +1,12 @@
+mod attributes;
 mod queries;
 mod reflect;
 mod serde;
 
+use attributes::ComponentAttributes;
 use proc_macro2::{Ident, TokenStream};
 use queries::{
-    create_archetype_component_tables, remove_archetype, insert_archetype, select_query,
+    create_archetype_component_tables, insert_archetype, remove_archetype, select_query,
     update_archetype,
 };
 use quote::{quote, TokenStreamExt};
@@ -12,7 +14,7 @@ use reflect::reflect_component;
 use serde::{deserialize_components, deserialize_fields, serialize_components, serialize_fields};
 use syn::{Data, DeriveInput};
 
-#[proc_macro_derive(Component)]
+#[proc_macro_derive(Component, attributes(erm))]
 pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(stream);
     let derive: DeriveInput = syn::parse2(stream).unwrap();
@@ -32,10 +34,21 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
             let name = field.ident.as_ref().unwrap().to_string();
             let typename = &field.ty;
 
-            quote! {
-                ::erm::component::ColumnDefinition::<#database> {
-                    name: #name,
-                    type_info: <#typename as ::sqlx::Type<#database>>::type_info(),
+            let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
+
+            if let Some(storage_type) = attributes.store_as {
+                quote! {
+                    ::erm::component::ColumnDefinition::<#database> {
+                        name: #name,
+                        type_info: <#storage_type as ::sqlx::Type<#database>>::type_info(),
+                    }
+                }
+            } else {
+                quote! {
+                    ::erm::component::ColumnDefinition::<#database> {
+                        name: #name,
+                        type_info: <#typename as ::sqlx::Type<#database>>::type_info(),
+                    }
                 }
             }
         });

@@ -2,6 +2,8 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{DataStruct, Field, Fields};
 
+use crate::attributes::ComponentAttributes;
+
 fn idents(field: &Field) -> &Ident {
     field.ident.as_ref().unwrap()
 }
@@ -15,8 +17,17 @@ fn type_info<'database, 'field>(
 ) -> impl Fn(&'field Field) -> TokenStream + 'database {
     move |field: &'field Field| {
         let typename = &field.ty;
-        quote! {
-            <#typename as ::sqlx::Type<#database>>::type_info()
+
+        let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
+
+        if let Some(storage_type) = attributes.store_as {
+            quote! {
+                <#storage_type as ::sqlx::Type<#database>>::type_info()
+            }
+        } else {
+            quote! {
+                <#typename as ::sqlx::Type<#database>>::type_info()
+            }
         }
     }
 }

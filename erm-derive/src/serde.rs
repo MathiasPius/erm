@@ -2,6 +2,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Fields, Ident};
 
+use crate::attributes::ComponentAttributes;
+
 pub fn deserialize_fields(
     database: &TokenStream,
     component_name: &Ident,
@@ -11,8 +13,16 @@ pub fn deserialize_fields(
         let name = field.ident.as_ref().unwrap();
         let typename = &field.ty;
 
-        quote! {
-            let #name = row.try_get::<#typename>();
+        let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
+
+        if let Some(intermediate) = attributes.deser_as {
+            quote! {
+                let #name: Result<#typename, _> = row.try_get::<#intermediate>().map(|field| <#typename as From<#intermediate>>::from(field));
+            }
+        } else {
+            quote! {
+                let #name = row.try_get::<#typename>();
+            }
         }
     });
 
@@ -40,9 +50,18 @@ pub fn deserialize_fields(
 pub fn serialize_fields(database: &TokenStream, fields: &Fields) -> TokenStream {
     let binds = fields.iter().map(|field| {
         let name = field.ident.as_ref().unwrap();
+        let typename = &field.ty;
 
-        quote! {
-            let query = query.bind(&self.#name);
+        let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
+
+        if let Some(intermediate) = attributes.ser_as {
+            quote! {
+                let query = query.bind(<#typename as AsRef<#intermediate>>::as_ref(&self.#name));
+            }
+        } else {
+            quote! {
+                let query = query.bind(&self.#name);
+            }
         }
     });
 

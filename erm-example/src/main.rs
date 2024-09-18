@@ -14,9 +14,24 @@ struct Position {
     pub y: i64,
 }
 
-#[derive(Debug, Component, PartialEq, Eq)]
+#[derive(Debug)]
+struct MyWeirdThing(String);
+
+impl From<String> for MyWeirdThing {
+    fn from(value: String) -> Self {
+        MyWeirdThing(value)
+    }
+}
+impl AsRef<String> for MyWeirdThing {
+    fn as_ref(&self) -> &String {
+        &self.0
+    }
+}
+
+#[derive(Debug, Component)]
 struct Parent {
-    pub parent: Uuid,
+    #[erm(store_as = String)]
+    pub parent: MyWeirdThing,
 }
 
 #[tokio::main]
@@ -50,13 +65,15 @@ async fn main() {
         ))
         .await;
 
-    let bob = backend
+    let _bob = backend
         .spawn(&(
             FriendlyName {
                 friendly_name: "Bob".to_string(),
             },
             Position { x: 30, y: 30 },
-            Parent { parent: alice },
+            Parent {
+                parent: MyWeirdThing("Alice".to_string()),
+            },
         ))
         .await;
 
@@ -66,7 +83,9 @@ async fn main() {
                 friendly_name: "Charlie".to_string(),
             },
             Position { x: 40, y: 40 },
-            Parent { parent: bob },
+            Parent {
+                parent: MyWeirdThing("Bob".to_string()),
+            },
         ))
         .await;
 
@@ -76,18 +95,20 @@ async fn main() {
         parent: Parent,
     }
 
-    let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
-        .collect()
-        .await;
+    let children: Vec<_> =
+        Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq("Bob".to_string())))
+            .collect()
+            .await;
 
     assert_eq!(children.len(), 1);
     println!("{children:#?}");
 
     backend.remove::<Person>(&charlie).await;
 
-    let children: Vec<_> = Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq(bob)))
-        .collect()
-        .await;
+    let children: Vec<_> =
+        Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq("Bob".to_string())))
+            .collect()
+            .await;
 
     assert!(children.is_empty());
 }
