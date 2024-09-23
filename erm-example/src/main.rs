@@ -29,8 +29,8 @@ impl AsRef<String> for MyWeirdThing {
 }
 
 #[derive(Debug, Component)]
+#[erm(table = "lol")]
 struct Parent {
-    #[erm(store_as = String)]
     pub parent: MyWeirdThing,
 }
 

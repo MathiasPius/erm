@@ -269,27 +269,17 @@ where
 macro_rules! expand_inner_join {
     ($db:ty, $first:ident, $second:ident) => {
         crate::cte::InnerJoin {
-            left: (
+            left:
                 Box::new(<$first as Archetype<$db>>::list_statement()),
-                "entity".to_string(),
-            ),
-            right: (
+            right:
                 Box::new(<$second as Archetype<$db>>::list_statement()),
-                "entity".to_string(),
-            ),
         }
     };
 
     ($db:ty, $first:ident, $($list:ident),*) => {
         crate::cte::InnerJoin {
-            left: (
-                Box::new(<$first as Archetype<$db>>::list_statement()),
-                "entity".to_string(),
-            ),
-            right: (
-                Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
-                "entity".to_string(),
-            ),
+            left: Box::new(<$first as Archetype<$db>>::list_statement()),
+            right: Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
         }
     };
 }

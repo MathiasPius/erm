@@ -2,8 +2,6 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::Fields;
 
-use crate::attributes::ComponentAttributes;
-
 pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream {
     let reflection_name = Ident::new(&format!("Reflected{component_name}"), component_name.span());
 

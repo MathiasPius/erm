@@ -17,8 +17,10 @@ pub trait CommonTableExpression: 'static {
         let mut joins = self
             .joins()
             .iter()
-            .map(|(right, a, b)| {
-                format!("    inner join\n      {right}\n    on\n      {left}.{a} == {right}.{b}")
+            .map(|right| {
+                format!(
+                    "    inner join\n      {right}\n    on\n      {left}.entity == {right}.entity"
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -46,7 +48,7 @@ pub trait CommonTableExpression: 'static {
         Vec::new()
     }
 
-    fn joins(&self) -> Vec<(Table, Column, Column)> {
+    fn joins(&self) -> Vec<Table> {
         Vec::new()
     }
 
@@ -93,38 +95,33 @@ impl CommonTableExpression for Filter {
         wheres
     }
 
-    fn joins(&self) -> Vec<(Table, Column, Column)> {
+    fn joins(&self) -> Vec<Table> {
         self.inner.joins()
     }
 }
 
 pub struct InnerJoin {
-    pub left: (Box<dyn CommonTableExpression>, Column),
-    pub right: (Box<dyn CommonTableExpression>, Column),
+    pub left: Box<dyn CommonTableExpression>,
+    pub right: Box<dyn CommonTableExpression>,
 }
 
 impl CommonTableExpression for InnerJoin {
     fn columns(&self) -> Vec<(Table, Column)> {
         self.left
-            .0
             .columns()
             .into_iter()
-            .chain(&mut self.right.0.columns().into_iter())
+            .chain(&mut self.right.columns().into_iter())
             .collect::<Vec<_>>()
     }
 
     fn primary_table(&self) -> Table {
-        self.left.0.primary_table()
+        self.left.primary_table()
     }
 
-    fn joins(&self) -> Vec<(Table, Column, Column)> {
-        let mut joins = self.right.0.joins();
-        joins.append(&mut self.left.0.joins());
-        joins.push((
-            self.right.0.primary_table(),
-            self.left.1.clone(),
-            self.right.1.clone(),
-        ));
+    fn joins(&self) -> Vec<Table> {
+        let mut joins = self.right.joins();
+        joins.append(&mut self.left.joins());
+        joins.push(self.right.primary_table());
 
         joins
     }
