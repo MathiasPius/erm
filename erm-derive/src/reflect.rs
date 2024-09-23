@@ -1,29 +1,15 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::Fields;
 
-pub fn reflect_component(component_name: &Ident, fields: &Fields) -> TokenStream {
+use crate::field::Field;
+
+pub fn reflect_component(component_name: &Ident, fields: &Vec<Field>) -> TokenStream {
     let reflection_name = Ident::new(&format!("Reflected{component_name}"), component_name.span());
 
-    let declarations = fields.iter().map(|field| {
-        let name = field.ident.as_ref().unwrap();
-        let typename = &field.ty;
-
-        let attributes = ComponentAttributes::from_attributes(&field.attrs).unwrap();
-
-        if let Some(storage_type) = attributes.store_as {
-            quote! {
-                pub #name: ::erm::reflect::ReflectedColumn<#storage_type>
-            }
-        } else {
-            quote! {
-                pub #name: ::erm::reflect::ReflectedColumn<#typename>
-            }
-        }
-    });
+    let declarations = fields.iter().map(Field::reflected_column);
 
     let constructors = fields.iter().map(|field| {
-        let name = field.ident.as_ref().unwrap();
+        let name = &field.ident;
         let stringified = name.to_string();
 
         quote! {

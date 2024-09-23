@@ -11,10 +11,10 @@ pub struct Archetype {
 
 impl Archetype {
     pub fn implementation(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
-        let archetype_name = self.typename.to_string();
+        let archetype_name = &self.typename;
 
         let create = self.create(sqlx, database);
-        
+
         let insert = self.insert(sqlx, database);
         let update = self.update(database);
         let remove = self.remove(sqlx, database);
@@ -44,20 +44,20 @@ impl Archetype {
     fn create(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
             let typename = &field.typename;
-    
+
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
             }
         });
-    
+
         quote! {
             fn create_component_tables<'a, Entity>(
                 pool: &'a #sqlx::Pool<#database>,
             ) -> impl ::std::future::Future<Output = Result<(), #sqlx::Error>> + Send + 'a where Entity: #sqlx::Type<#database> {
-    
+
                 async move {
                     #(#sub_archetypes)*
-    
+
                     Ok(())
                 }
             }
@@ -68,12 +68,12 @@ impl Archetype {
         let sub_archetypes = self.fields.iter().map(|field| {
             let name = &field.ident;
             let typename = &field.typename;
-    
+
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::insert_archetype(&self.#name, query);
             }
         });
-    
+
         quote! {
             fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
             where
@@ -83,17 +83,17 @@ impl Archetype {
             }
         }
     }
-    
+
     fn update(&self, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
             let name = &field.ident;
             let typename = &field.typename;
-    
+
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::update_archetype(&self.#name, query);
             }
         });
-    
+
         quote! {
             fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
             where
@@ -166,7 +166,7 @@ impl Archetype {
                 query: #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>>,
             ) -> #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>> {
                 #(#binds)*
-    
+
                 query
             }
         }
@@ -187,13 +187,13 @@ impl Archetype {
             let ident = &field.ident;
 
             quote! {
-                #ident: #ident?,
+                #ident: #ident?
             }
         });
 
         quote! {
-            fn deserialize_fields(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
-                #(#components;)*
+            fn deserialize_components(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
+                #(#components)*
 
                 let archetype = #archetype_name {
                     #(#assignments,)*

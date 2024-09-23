@@ -39,10 +39,10 @@ impl Component {
     }
 
     fn statements(&self, placeholder_char: char) -> TokenStream {
-        let table = &self.table_name;
+        let table = &self.table_name.trim_matches('"');
 
         let column_names: Vec<_> = self.fields.iter().map(Field::column_name).collect();
-        let placeholders = placeholders(placeholder_char, column_names.len());
+        let placeholders = placeholders(placeholder_char, column_names.len() + 1);
 
         let insert = format!(
             "insert into {table}(entity, {column_names}) values({placeholders});",
@@ -53,7 +53,7 @@ impl Component {
         let update = {
             let field_updates = column_names
                 .iter()
-                .zip(placeholders.iter())
+                .zip(placeholders.iter().skip(1))
                 .map(|(column, placeholder)| format!("{column} = {placeholder}"))
                 .collect::<Vec<_>>();
 
@@ -73,6 +73,8 @@ impl Component {
     }
 
     fn table_creator(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
+        let table = &self.table_name.trim_matches('"');
+
         let columns = self
             .fields
             .iter()
@@ -80,6 +82,9 @@ impl Component {
             .map(|column| format!("{column} {{}} {{}}"))
             .collect::<Vec<_>>()
             .join(", ");
+
+        let format_str =
+            format!("create table if not exists {table}(entity {{}} primary key, {columns}\n);");
 
         let definitions = self
             .fields
@@ -93,21 +98,24 @@ impl Component {
             where
                 Entity: #sqlx::Type<#database>,
             {
-                use sqlx::TypeInfo as _;
+                async move {
+                    use sqlx::TypeInfo as _;
+                    use sqlx::Executor as _;
 
-                let sql = format!(
-                    #columns,
-                    <Entity as #sqlx::Type<#database>>::type_info().name(),
-                    #(#definitions,)*
-                );
+                    let sql = format!(
+                        #format_str,
+                        <Entity as #sqlx::Type<#database>>::type_info().name(),
+                        #(#definitions,)*
+                    );
 
-                pool.execute(sql.as_str()).await
+                    pool.execute(sql.as_str()).await
+                }
             }
         }
     }
 
     fn table(&self) -> TokenStream {
-        let table_name = &self.table_name;
+        let table_name = &self.table_name.trim_matches('"');
         quote! {
             fn table() -> &'static str {
                 #table_name
@@ -151,7 +159,7 @@ impl Component {
             let ident = &field.ident;
 
             quote! {
-                #ident: #ident?,
+                #ident: #ident?
             }
         });
 

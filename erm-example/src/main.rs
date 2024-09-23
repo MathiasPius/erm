@@ -3,8 +3,6 @@ use futures::StreamExt as _;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use uuid::Uuid;
 
-mod main2;
-
 #[derive(Debug, Component, PartialEq, Eq)]
 struct FriendlyName {
     friendly_name: String,
@@ -24,15 +22,16 @@ impl From<String> for MyWeirdThing {
         MyWeirdThing(value)
     }
 }
-impl AsRef<String> for MyWeirdThing {
-    fn as_ref(&self) -> &String {
-        &self.0
+impl Into<String> for &MyWeirdThing {
+    fn into(self) -> String {
+        self.0.clone()
     }
 }
 
 #[derive(Debug, Component)]
-#[erm(table = "lol")]
+#[erm(table = "parents")]
 struct Parent {
+    #[erm(intermediate = String)]
     pub parent: MyWeirdThing,
 }
 

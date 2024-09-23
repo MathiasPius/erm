@@ -56,13 +56,13 @@ impl Field {
         let typename = &self.typename;
         let intermediate = &self.intermediate_type;
 
-        if intermediate != typename {
+        if intermediate == typename {
             quote! {
                 let query = query.bind(&self.#name);
             }
         } else {
             quote! {
-                let query = query.bind(<#typename as Into<#intermediate>>::into(&self.#name));
+                let query = query.bind(<&#typename as Into<#intermediate>>::into(&self.#name));
             }
         }
     }
@@ -79,6 +79,22 @@ impl Field {
         } else {
             quote! {
                 let #name = row.try_get::<#typename>();
+            }
+        }
+    }
+
+    pub fn reflected_column(&self) -> TokenStream {
+        let name = &self.ident;
+        let typename = &self.typename;
+        let intermediate = &self.intermediate_type;
+
+        if intermediate != typename {
+            quote! {
+                pub #name: ::erm::reflect::ReflectedColumn<#intermediate>
+            }
+        } else {
+            quote! {
+                pub #name: ::erm::reflect::ReflectedColumn<#typename>
             }
         }
     }

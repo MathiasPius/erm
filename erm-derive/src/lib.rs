@@ -1,12 +1,13 @@
 mod archetype;
 mod component;
 mod field;
-//mod reflect;
+mod reflect;
 
 use archetype::Archetype;
 use component::Component;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, TokenStreamExt};
+use reflect::reflect_component;
 use syn::spanned::Spanned;
 
 #[proc_macro_derive(Component, attributes(erm))]
@@ -22,10 +23,12 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
         component.implementation(&sqlx, &database, placeholder_char)
     };
 
-    implement_for(span, implementation).into()
+    let mut implementations = implement_for(span, implementation);
+    implementations.append_all(reflect_component(&component.typename, &component.fields));
+    implementations.into()
 }
 
-#[proc_macro_derive(Archetype)]
+#[proc_macro_derive(Archetype, attributes(erm))]
 pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(stream);
     let span = stream.span();
