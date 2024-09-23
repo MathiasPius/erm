@@ -3,6 +3,8 @@ use futures::StreamExt as _;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use uuid::Uuid;
 
+mod main2;
+
 #[derive(Debug, Component, PartialEq, Eq)]
 struct FriendlyName {
     friendly_name: String,

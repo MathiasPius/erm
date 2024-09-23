@@ -93,9 +93,11 @@ impl Component {
             where
                 Entity: #sqlx::Type<#database>,
             {
+                use sqlx::TypeInfo as _;
+
                 let sql = format!(
                     #columns,
-                    <Entity as #sqlx::Type<#database>>::type_info().name()
+                    <Entity as #sqlx::Type<#database>>::type_info().name(),
                     #(#definitions,)*
                 );
 

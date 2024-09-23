@@ -47,7 +47,7 @@ impl Field {
                 "null"
             } else {
                 "not null"
-            },
+            }
         }
     }
 
