@@ -17,7 +17,11 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let component: Component = syn::parse2(stream).unwrap();
 
     let implementation = |database: Ident, placeholder_char: char| {
+        #[cfg(feature = "bundled")]
+        let sqlx = quote! {::erm::sqlx};
+        #[cfg(not(feature = "bundled"))]
         let sqlx = quote! {::sqlx};
+
         let database = quote! {#sqlx::#database};
 
         component.implementation(&sqlx, &database, placeholder_char)
@@ -35,6 +39,9 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     let archetype: Archetype = syn::parse2(stream).unwrap();
 
     let implementation = |database: Ident, _: char| {
+        #[cfg(feature = "bundled")]
+        let sqlx = quote! {::erm::sqlx};
+        #[cfg(not(feature = "bundled"))]
         let sqlx = quote! {::sqlx};
         let database = quote! {#sqlx::#database};
 
@@ -44,8 +51,11 @@ pub fn derive_archetype(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     implement_for(span, implementation).into()
 }
 
+#[allow(unused)]
 fn implement_for(span: Span, implementer: impl Fn(Ident, char) -> TokenStream) -> TokenStream {
+    #[allow(unused_mut)]
     let mut implementations = TokenStream::new();
+
     #[cfg(feature = "sqlite")]
     implementations.append_all(implementer(Ident::new("Sqlite", span), '?'));
 

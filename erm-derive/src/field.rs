@@ -7,7 +7,7 @@ use syn::{parse::Parse, Type};
 pub struct Field {
     pub ident: Ident,
     pub typename: Type,
-    pub intermediate_type: Type,
+    pub intermediate_type: Option<Type>,
     pub column_name: String,
 }
 
@@ -19,9 +19,8 @@ impl Field {
     pub fn column_definition(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let name = &self.column_name;
         let typename = &self.typename;
-        let intermediate = &self.intermediate_type;
 
-        if intermediate != typename {
+        if let Some(intermediate) = &self.intermediate_type {
             quote! {
                 ::erm::component::ColumnDefinition::<#database> {
                     name: #name,
@@ -39,14 +38,24 @@ impl Field {
     }
 
     pub fn sql_definition(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
-        let intermediate = &self.intermediate_type;
-
-        quote! {
-            <#intermediate as #sqlx::Type<#database>>::type_info().name(),
-            if <#intermediate as #sqlx::Type<#database>>::type_info().is_null() {
-                "null"
-            } else {
-                "not null"
+        if let Some(intermediate) = &self.intermediate_type {
+            quote! {
+                <#intermediate as #sqlx::Type<#database>>::type_info().name(),
+                if <#intermediate as #sqlx::Type<#database>>::type_info().is_null() {
+                    "null"
+                } else {
+                    "not null"
+                }
+            }
+        } else {
+            let typename = &self.typename;
+            quote! {
+                <#typename as #sqlx::Type<#database>>::type_info().name(),
+                if <#typename as #sqlx::Type<#database>>::type_info().is_null() {
+                    "null"
+                } else {
+                    "not null"
+                }
             }
         }
     }
@@ -54,15 +63,14 @@ impl Field {
     pub fn serialize(&self) -> TokenStream {
         let name = &self.ident;
         let typename = &self.typename;
-        let intermediate = &self.intermediate_type;
 
-        if intermediate == typename {
+        if let Some(intermediate) = &self.intermediate_type {
             quote! {
-                let query = query.bind(&self.#name);
+                let query = query.bind(<&#typename as Into<#intermediate>>::into(&self.#name));
             }
         } else {
             quote! {
-                let query = query.bind(<&#typename as Into<#intermediate>>::into(&self.#name));
+                let query = query.bind(&self.#name);
             }
         }
     }
@@ -70,9 +78,8 @@ impl Field {
     pub fn deserialize(&self) -> TokenStream {
         let name = &self.ident;
         let typename = &self.typename;
-        let intermediate = &self.intermediate_type;
 
-        if intermediate != typename {
+        if let Some(intermediate) = &self.intermediate_type {
             quote! {
                 let #name: Result<#typename, _> = row.try_get::<#intermediate>().map(|field| <#typename as From<#intermediate>>::from(field));
             }
@@ -86,9 +93,8 @@ impl Field {
     pub fn reflected_column(&self) -> TokenStream {
         let name = &self.ident;
         let typename = &self.typename;
-        let intermediate = &self.intermediate_type;
 
-        if intermediate != typename {
+        if let Some(intermediate) = &self.intermediate_type {
             quote! {
                 pub #name: ::erm::reflect::ReflectedColumn<#intermediate>
             }
@@ -121,10 +127,7 @@ impl TryFrom<(usize, syn::Field)> for Field {
 
         let type_name = field.ty.clone();
 
-        let intermediate_type = attributes
-            .iter()
-            .find_map(FieldAttribute::intermediate)
-            .unwrap_or_else(|| field.ty.clone());
+        let intermediate_type = attributes.iter().find_map(FieldAttribute::intermediate);
 
         let column_name = attributes
             .iter()
@@ -147,7 +150,7 @@ impl TryFrom<(usize, syn::Field)> for Field {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FieldAttributeList(pub Vec<FieldAttribute>);
 
 impl Parse for FieldAttributeList {
@@ -166,7 +169,7 @@ impl Parse for FieldAttributeList {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum FieldAttribute {
     /// Changes the name of the field's column in the table
     Column { name: Literal },

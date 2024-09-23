@@ -94,6 +94,9 @@ pub mod entity;
 pub mod reflect;
 pub mod row;
 
+#[cfg(feature = "bundled")]
+pub use ::sqlx;
+
 pub mod prelude {
     #[cfg(feature = "derive")]
     pub use erm_derive::*;

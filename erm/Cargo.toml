@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 derive = ["dep:erm-derive"]
+bundled = ["erm-derive/bundled"]
 
 sqlite = ["sqlx/sqlite", "erm-derive/sqlite"]
 postgres = ["sqlx/postgres", "erm-derive/postgres"]
