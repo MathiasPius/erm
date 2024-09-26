@@ -4,7 +4,7 @@ use futures::TryStreamExt as _;
 #[derive(Component, Debug)]
 pub struct Name(String);
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, PartialEq)]
 pub struct Age(u32);
 
 #[tokio::main]
@@ -64,4 +64,22 @@ async fn main() {
     //         },
     //     ),
     // ]
+
+    backend.remove::<Person>(&jimothy).await;
+
+    let remaining_names = backend
+        .list_all::<Name>()
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap();
+
+    // Check that only Andrea is left.
+    assert_eq!(remaining_names.len(), 1);
+    println!("{:#?}", remaining_names[0].1);
+    // Name(
+    //     "Andrea",
+    // )
+
+    // Fetch Andrea's age
+    assert_eq!(backend.get::<Age>(&andrea).await.unwrap(), Age(32));
 }
