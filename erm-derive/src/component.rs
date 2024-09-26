@@ -38,6 +38,12 @@ impl Component {
         }
     }
 
+    pub fn is_tuple(&self) -> bool {
+        self.fields
+            .iter()
+            .all(|field| matches!(field, Field::Numbered { .. }))
+    }
+
     fn statements(&self, placeholder_char: char) -> TokenStream {
         let table = &self.table_name.trim_matches('"');
 
@@ -156,9 +162,13 @@ impl Component {
         let deserialized_fields = self.fields.iter().map(Field::deserialize);
 
         let assignments = self.fields.iter().map(|field| match field {
-            Field::Numbered { ident, .. } => quote! {
-                #ident?
-            },
+            Field::Numbered { ident, .. } => {
+                let ident = Ident::new(&format!("self_{ident}"), ident.span());
+
+                quote! {
+                    #ident?
+                }
+            }
             Field::Named { ident, .. } => quote! {
                 #ident: #ident?
             },

@@ -28,7 +28,9 @@ pub fn derive_component(stream: proc_macro::TokenStream) -> proc_macro::TokenStr
     };
 
     let mut implementations = implement_for(span, implementation);
-    implementations.append_all(reflect_component(&component.typename, &component.fields));
+    if !component.is_tuple() {
+        implementations.append_all(reflect_component(&component.typename, &component.fields));
+    }
     implementations.into()
 }
 

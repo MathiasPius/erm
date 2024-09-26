@@ -6,13 +6,13 @@ use syn::{parse::Parse, Type};
 
 pub enum Field {
     Numbered {
-        ident: Ident,
+        ident: TokenStream,
         typename: Type,
         intermediate_type: Option<Type>,
         column_name: String,
     },
     Named {
-        ident: Ident,
+        ident: TokenStream,
         typename: Type,
         intermediate_type: Option<Type>,
         column_name: String,
@@ -20,7 +20,7 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn ident(&self) -> &Ident {
+    pub fn ident(&self) -> &TokenStream {
         match self {
             Field::Numbered { ident, .. } | Field::Named { ident, .. } => &ident,
         }
@@ -194,14 +194,15 @@ impl TryFrom<(usize, syn::Field)> for Field {
 
         if let Some(ident) = field.ident {
             Ok(Field::Named {
-                ident,
+                ident: quote! { #ident },
                 typename,
                 intermediate_type,
                 column_name,
             })
         } else {
+            let index = syn::Index::from(index);
             Ok(Field::Numbered {
-                ident: Ident::new(&index.to_string().trim_matches('"'), field.span()),
+                ident: quote! { #index },
                 typename,
                 intermediate_type,
                 column_name,
