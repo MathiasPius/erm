@@ -17,7 +17,6 @@ async fn main() {
     backend.register::<Age>().await.unwrap();
 
     let jimothy = 1;
-
     backend
         .insert(&jimothy, &(Name("Jimothy".to_string()), Age(10)))
         .await;
@@ -27,6 +26,7 @@ async fn main() {
         .insert(&andrea, &(Name("Andrea".to_string()), Age(32)))
         .await;
 
+    // Let's name an Archetype instead of just relying on a tuple.
     #[derive(Archetype, Debug)]
     struct Person {
         name: Name,
