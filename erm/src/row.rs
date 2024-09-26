@@ -1,6 +1,5 @@
 use crate::archetype::Archetype;
 use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row};
-use tracing::trace;
 
 pub struct OffsetRow<'r, R: Row> {
     pub row: &'r R,
@@ -23,13 +22,6 @@ impl<'r, R: Row> OffsetRow<'r, R> {
         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
         usize: ColumnIndex<R>,
     {
-        trace!(
-            "reading row {} from {:?} as {:?}",
-            self.offset,
-            self.row.try_column(self.offset),
-            std::any::type_name::<T>()
-        );
-
         let result = self.row.try_get::<'a, T, usize>(self.offset);
         self.offset += 1;
         result
@@ -52,7 +44,6 @@ where
     usize: ColumnIndex<R>,
 {
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
-        trace!("parsing row with columns {:?}", row.columns());
         let mut row = OffsetRow::new(row);
         let entity = row.try_get::<Entity>()?;
 

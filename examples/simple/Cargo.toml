@@ -1,0 +1,9 @@
+[package]
+name = "simple"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+erm = { workspace = true, features = ["sqlite", "derive"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+sqlx.workspace = true

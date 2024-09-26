@@ -13,14 +13,12 @@ mysql = ["sqlx/mysql", "erm-derive/mysql"]
 uuid = ["dep:uuid", "sqlx/uuid"]
 
 [dependencies]
+sqlx.workspace = true
 erm-derive = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
-sqlx = { workspace = true }
-async-trait = { workspace = true }
-futures = { workspace = true }
-const_format = "0.2.32"
-tracing = "0.1.40"
-async-stream = "0.3.5"
+async-trait.workspace = true
+async-stream.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

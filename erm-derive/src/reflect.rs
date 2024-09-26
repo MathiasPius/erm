@@ -9,7 +9,7 @@ pub fn reflect_component(component_name: &Ident, fields: &Vec<Field>) -> TokenSt
     let declarations = fields.iter().map(Field::reflected_column);
 
     let constructors = fields.iter().map(|field| {
-        let name = &field.ident;
+        let name = field.ident();
         let stringified = name.to_string();
 
         quote! {

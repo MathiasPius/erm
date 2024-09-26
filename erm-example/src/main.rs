@@ -57,7 +57,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let alice = backend
+    let _alice = backend
         .spawn(&(
             FriendlyName {
                 friendly_name: "Alice".to_string(),

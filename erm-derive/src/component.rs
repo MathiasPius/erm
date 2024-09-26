@@ -155,21 +155,36 @@ impl Component {
         let component_name = &self.typename;
         let deserialized_fields = self.fields.iter().map(Field::deserialize);
 
-        let assignments = self.fields.iter().map(|field| {
-            let ident = &field.ident;
-
-            quote! {
+        let assignments = self.fields.iter().map(|field| match field {
+            Field::Numbered { ident, .. } => quote! {
+                #ident?
+            },
+            Field::Named { ident, .. } => quote! {
                 #ident: #ident?
-            }
+            },
         });
+
+        let constructor = match self
+            .fields
+            .first()
+            .map(|field| matches!(field, Field::Named { .. }))
+        {
+            None => quote! { #component_name },
+            Some(true) => quote! {
+                #component_name {
+                    #(#assignments,)*
+                }
+            },
+            Some(false) => quote! {
+                #component_name(#(#assignments,)*)
+            },
+        };
 
         quote! {
             fn deserialize_fields(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
                 #(#deserialized_fields;)*
 
-                let component = #component_name {
-                    #(#assignments,)*
-                };
+                let component = #constructor;
 
                 Ok(component)
             }

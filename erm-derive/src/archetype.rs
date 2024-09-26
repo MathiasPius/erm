@@ -43,7 +43,7 @@ impl Archetype {
 
     fn create(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
-            let typename = &field.typename;
+            let typename = field.typename();
 
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
@@ -66,8 +66,8 @@ impl Archetype {
 
     fn insert(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
-            let name = &field.ident;
-            let typename = &field.typename;
+            let name = field.ident();
+            let typename = field.typename();
 
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::insert_archetype(&self.#name, query);
@@ -86,8 +86,8 @@ impl Archetype {
 
     fn update(&self, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
-            let name = &field.ident;
-            let typename = &field.typename;
+            let name = field.ident();
+            let typename = field.typename();
 
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::update_archetype(&self.#name, query);
@@ -106,7 +106,7 @@ impl Archetype {
 
     fn remove(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
-            let typename = &field.typename;
+            let typename = field.typename();
 
             quote! {
                 <#typename as ::erm::archetype::Archetype<#database>>::remove_archetype(query);
@@ -125,14 +125,14 @@ impl Archetype {
 
     fn select(&self, database: &TokenStream) -> TokenStream {
         let mut fields = self.fields.iter();
-        let first_item = &fields.next().unwrap().typename;
+        let first_item = fields.next().unwrap().typename();
 
         let first = quote! {
             let join = <#first_item as ::erm::archetype::Archetype<#database>>::list_statement();
         };
 
         let list_statements = fields.map(|field| {
-            let field = &field.typename;
+            let field = field.typename();
 
             quote! {
                 let join = ::erm::cte::InnerJoin {
@@ -154,7 +154,7 @@ impl Archetype {
 
     fn component_serializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let binds = self.fields.iter().map(|field| {
-            let field_name = &field.ident;
+            let field_name = field.ident();
             quote! {
                 let query = self.#field_name.serialize_components(query);
             }
@@ -175,8 +175,8 @@ impl Archetype {
     fn component_deserializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let archetype_name = &self.typename;
         let components = self.fields.iter().map(|field| {
-            let name = &field.ident;
-            let typename = &field.typename;
+            let name = field.ident();
+            let typename = field.typename();
 
             quote! {
                 let #name = <#typename as ::erm::archetype::Archetype<#database>>::deserialize_components(row);
@@ -184,7 +184,7 @@ impl Archetype {
         });
 
         let assignments = self.fields.iter().map(|field| {
-            let ident = &field.ident;
+            let ident = field.ident();
 
             quote! {
                 #ident: #ident?
