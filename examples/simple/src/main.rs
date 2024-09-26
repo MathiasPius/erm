@@ -1,24 +1,43 @@
-use erm::prelude::{Component, SqliteBackend};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use erm::prelude::*;
+use futures::TryStreamExt as _;
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Name(String);
+
+#[derive(Component, Debug)]
+pub struct Age(u32);
 
 #[tokio::main]
 async fn main() {
-    let options = SqliteConnectOptions::new()
-        .in_memory(true)
-        .create_if_missing(true);
+    // Create an Sqlite backend using u64 as entity IDs
+    let backend: SqliteBackend<i64> = SqliteBackend::in_memory().await;
 
-    let db = SqlitePoolOptions::new()
-        .min_connections(1)
-        .max_connections(1)
-        .idle_timeout(None)
-        .max_lifetime(None)
-        .connect_with(options)
+    // This creates the component tables where data will be persisted.
+    backend.register::<Name>().await.unwrap();
+    backend.register::<Age>().await.unwrap();
+
+    let jimothy = 1;
+
+    backend
+        .insert(&jimothy, &(Name("Jimothy".to_string()), Age(10)))
+        .await;
+
+    let andrea = 2;
+    backend
+        .insert(&andrea, &(Name("Andrea".to_string()), Age(32)))
+        .await;
+
+    #[derive(Archetype, Debug)]
+    struct Person {
+        name: Name,
+        age: Age,
+    }
+
+    let people = backend
+        .list_all::<Person>()
+        .try_collect::<Vec<_>>()
         .await
         .unwrap();
 
-    // Create an Sqlite backend using u64 as entity IDs
-    let backend: SqliteBackend<u64> = SqliteBackend::new(db);
+    println!("{people:#?}");
 }

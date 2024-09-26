@@ -1,6 +1,7 @@
 use std::{future::Future, marker::PhantomData};
 
 use futures::Stream;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Sqlite};
 
 use crate::archetype::Archetype;
@@ -19,6 +20,21 @@ impl<Entity> SqliteBackend<Entity> {
             pool,
             _entity: PhantomData,
         }
+    }
+
+    pub async fn in_memory() -> Self {
+        let options = SqliteConnectOptions::new().in_memory(true);
+
+        let pool = SqlitePoolOptions::new()
+            .min_connections(1)
+            .max_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(options)
+            .await
+            .unwrap();
+
+        Self::new(pool)
     }
 }
 
