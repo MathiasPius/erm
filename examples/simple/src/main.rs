@@ -40,4 +40,28 @@ async fn main() {
         .unwrap();
 
     println!("{people:#?}");
+    // [
+    //     (
+    //         1,
+    //         Person {
+    //             name: Name(
+    //                 "Jimothy",
+    //             ),
+    //             age: Age(
+    //                 10,
+    //             ),
+    //         },
+    //     ),
+    //     (
+    //         2,
+    //         Person {
+    //             name: Name(
+    //                 "Andrea",
+    //             ),
+    //             age: Age(
+    //                 32,
+    //             ),
+    //         },
+    //     ),
+    // ]
 }
