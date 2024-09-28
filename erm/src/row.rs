@@ -1,5 +1,6 @@
-use crate::archetype::Archetype;
 use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row};
+
+use crate::serialization::Deserializeable;
 
 pub struct OffsetRow<'r, R: Row> {
     pub row: &'r R,
@@ -40,7 +41,7 @@ where
     R: Row,
     Entity: for<'e> sqlx::Decode<'e, <R as sqlx::Row>::Database>
         + sqlx::Type<<R as sqlx::Row>::Database>,
-    T: Archetype<<R as Row>::Database>,
+    T: Deserializeable<<R as Row>::Database>,
     usize: ColumnIndex<R>,
 {
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
@@ -49,7 +50,7 @@ where
 
         Ok(Rowed {
             entity,
-            inner: <T as Archetype<<R as Row>::Database>>::deserialize_components(&mut row)?,
+            inner: <T as Deserializeable<<R as Row>::Database>>::deserialize(&mut row)?,
         })
     }
 }

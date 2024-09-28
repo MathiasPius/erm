@@ -1,8 +1,11 @@
 use std::future::Future;
 
-use sqlx::{query::Query, Database, Pool};
+use sqlx::{Database, Pool};
 
-use crate::{entity::EntityPrefixedQuery, row::OffsetRow};
+use crate::{
+    entity::EntityPrefixedQuery,
+    serialization::{Deserializeable, Serializable},
+};
 
 pub struct ColumnDefinition<DB: Database> {
     pub name: &'static str,
@@ -20,7 +23,7 @@ impl<DB: Database> ColumnDefinition<DB> {
 }
 
 /// Describes reading and writing from a Component-specific Table.
-pub trait Component<DB: Database>: Sized {
+pub trait Component<DB: Database>: Serializable<DB> + Deserializeable<DB> + Sized {
     const OPTIONAL: bool = false;
     const INSERT: &'static str;
     const UPDATE: &'static str;
@@ -29,31 +32,6 @@ pub trait Component<DB: Database>: Sized {
     fn table() -> &'static str;
 
     fn columns() -> Vec<ColumnDefinition<DB>>;
-
-    fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
-
-    fn serialize_fields<'query>(
-        &'query self,
-        query: Query<'query, DB, <DB as Database>::Arguments<'query>>,
-    ) -> Query<'query, DB, <DB as Database>::Arguments<'query>>;
-
-    fn insert_component<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
-    {
-        query.query(Self::INSERT, move |query| self.serialize_fields(query))
-    }
-
-    fn update_component<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
-    {
-        query.query(Self::UPDATE, move |query| self.serialize_fields(query))
-    }
 
     fn remove_component<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
     where
@@ -67,42 +45,4 @@ pub trait Component<DB: Database>: Sized {
     ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where
         Entity: sqlx::Type<DB>;
-}
-
-impl<T: Component<DB>, DB: Database> Component<DB> for Option<T> {
-    const OPTIONAL: bool = true;
-    const INSERT: &'static str = T::INSERT;
-    const UPDATE: &'static str = T::UPDATE;
-    const DELETE: &'static str = T::DELETE;
-
-    fn table() -> &'static str {
-        T::table()
-    }
-
-    fn columns() -> Vec<ColumnDefinition<DB>> {
-        T::columns()
-    }
-
-    fn deserialize_fields(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error> {
-        match T::deserialize_fields(row) {
-            Ok(inner) => Ok(Some(inner)),
-            Err(err) => panic!("{:#?}", err),
-        }
-    }
-
-    fn serialize_fields<'query>(
-        &'query self,
-        _query: Query<'query, DB, <DB as Database>::Arguments<'query>>,
-    ) -> Query<'query, DB, <DB as Database>::Arguments<'query>> {
-        panic!("Can't serialize Options")
-    }
-
-    fn create_component_table<'pool, Entity>(
-        pool: &'pool Pool<DB>,
-    ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
-    where
-        Entity: sqlx::Type<DB>,
-    {
-        T::create_component_table::<Entity>(pool)
-    }
 }

@@ -52,10 +52,9 @@ async fn main() {
 
     let backend: SqliteBackend<Uuid> = SqliteBackend::new(db);
 
-    backend
-        .register::<(FriendlyName, Position, Parent)>()
-        .await
-        .unwrap();
+    backend.register::<FriendlyName>().await.unwrap();
+    backend.register::<Position>().await.unwrap();
+    backend.register::<Parent>().await.unwrap();
 
     let _alice = backend
         .spawn(&(

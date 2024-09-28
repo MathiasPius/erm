@@ -23,6 +23,9 @@ impl Component {
         let table = self.table();
         let columns = self.columns(sqlx, database);
         let table_creator = self.table_creator(sqlx, database);
+        let remove = self.remove(sqlx, database);
+        let insert = self.insert(sqlx, database);
+        let update = self.update(database);
         let serialize = self.field_serializer(sqlx, database);
         let deserialize = self.field_deserializer(sqlx, database);
 
@@ -32,8 +35,20 @@ impl Component {
                 #table
                 #columns
                 #table_creator
+            }
+
+            impl ::erm::serialization::Serializable<#database> for #component_name {
                 #serialize
+                #insert
+                #update
+            }
+
+            impl ::erm::serialization::Deserializeable<#database> for #component_name {
                 #deserialize
+            }
+
+            impl ::erm::tables::Removeable<#database> for #component_name {
+                #remove
             }
         }
     }
@@ -142,11 +157,48 @@ impl Component {
         }
     }
 
+    fn remove(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
+        quote! {
+            fn remove<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            where
+                Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query,
+            {
+                query.query(Self::DELETE, |query| query)
+            }
+        }
+    }
+
+    fn insert(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
+        quote! {
+            fn insert<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            where
+                Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
+            {
+                query.query(Self::INSERT, move |query| {
+                    <Self as Serializable<#database>>::serialize(self, query)
+                })
+            }
+        }
+    }
+
+    fn update(&self, database: &TokenStream) -> TokenStream {
+        quote! {
+            fn update<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            where
+                Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
+            {
+                query.query(Self::UPDATE, move |query| {
+                    <Self as Serializable<#database>>::serialize(self, query)
+                })
+            }
+        }
+    }
+
     fn field_serializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let binds = self.fields.iter().map(Field::serialize);
 
         quote! {
-            fn serialize_fields<'q>(
+            fn serialize<'q>(
                 &'q self,
                 query: #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>>,
             ) -> #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>> {
@@ -191,7 +243,7 @@ impl Component {
         };
 
         quote! {
-            fn deserialize_fields(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
+            fn deserialize(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
                 #(#deserialized_fields;)*
 
                 let component = #constructor;

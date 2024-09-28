@@ -1,11 +1,13 @@
 use std::{future::Future, marker::PhantomData};
 
 use futures::Stream;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteQueryResult};
 use sqlx::{Pool, Sqlite};
 
 use crate::archetype::Archetype;
 use crate::condition::Condition;
+use crate::prelude::{Component, Serializable};
+use crate::tables::Removeable;
 
 use super::Backend;
 
@@ -48,11 +50,11 @@ where
         + 'static,
     for<'entity> &'entity Entity: Send,
 {
-    fn register<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
+    fn register<T>(&self) -> impl Future<Output = Result<SqliteQueryResult, sqlx::Error>>
     where
-        T: Archetype<Sqlite>,
+        T: Component<Sqlite>,
     {
-        <T as Archetype<Sqlite>>::create_component_tables::<Entity>(&self.pool)
+        <T as Component<Sqlite>>::create_component_table::<Entity>(&self.pool)
     }
 
     fn list<T, Cond>(&self, condition: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
@@ -78,7 +80,7 @@ where
     where
         'a: 'b,
         'b: 'c,
-        T: Archetype<Sqlite> + Unpin + Send + 'static,
+        T: Archetype<Sqlite> + Serializable<Sqlite> + Unpin + Send + 'static,
     {
         <T as Archetype<Sqlite>>::insert(&components, &self.pool, entity)
     }
@@ -89,14 +91,14 @@ where
         components: &'a T,
     ) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<Sqlite> + Unpin + Send + 'static,
+        T: Archetype<Sqlite> + Serializable<Sqlite> + Unpin + Send + 'static,
     {
         <T as Archetype<Sqlite>>::update(&components, &self.pool, entity)
     }
 
     fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<Sqlite> + Unpin + Send + 'static,
+        T: Archetype<Sqlite> + Removeable<Sqlite> + Unpin + Send + 'static,
     {
         <T as Archetype<Sqlite>>::remove(&self.pool, entity)
     }

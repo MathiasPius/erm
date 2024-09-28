@@ -13,8 +13,6 @@ impl Archetype {
     pub fn implementation(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let archetype_name = &self.typename;
 
-        let create = self.create(sqlx, database);
-
         let insert = self.insert(sqlx, database);
         let update = self.update(database);
         let remove = self.remove(sqlx, database);
@@ -27,39 +25,21 @@ impl Archetype {
         quote! {
             impl ::erm::archetype::Archetype<#database> for #archetype_name
             {
-                #create
+                #select
+            }
 
+            impl ::erm::serialization::Serializable<#database> for #archetype_name {
+                #serializer
                 #insert
                 #update
-                #remove
+            }
 
-                #select
-
-                #serializer
+            impl ::erm::serialization::Deserializeable<#database> for #archetype_name {
                 #deserializer
             }
-        }
-    }
 
-    fn create(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
-        let sub_archetypes = self.fields.iter().map(|field| {
-            let typename = field.typename();
-
-            quote! {
-                <#typename as ::erm::archetype::Archetype<#database>>::create_component_tables::<Entity>(pool).await?;
-            }
-        });
-
-        quote! {
-            fn create_component_tables<'a, Entity>(
-                pool: &'a #sqlx::Pool<#database>,
-            ) -> impl ::std::future::Future<Output = Result<(), #sqlx::Error>> + Send + 'a where Entity: #sqlx::Type<#database> {
-
-                async move {
-                    #(#sub_archetypes)*
-
-                    Ok(())
-                }
+            impl ::erm::tables::Removeable<#database> for #archetype_name {
+                #remove
             }
         }
     }
@@ -70,12 +50,12 @@ impl Archetype {
             let typename = field.typename();
 
             quote! {
-                <#typename as ::erm::archetype::Archetype<#database>>::insert_archetype(&self.#name, query);
+                <#typename as ::erm::serialization::Serializable<#database>>::insert(&self.#name, query);
             }
         });
 
         quote! {
-            fn insert_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn insert<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
             where
                 Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
             {
@@ -90,12 +70,12 @@ impl Archetype {
             let typename = field.typename();
 
             quote! {
-                <#typename as ::erm::archetype::Archetype<#database>>::update_archetype(&self.#name, query);
+                <#typename as ::erm::serialization::Serializable<#database>>::update(&self.#name, query);
             }
         });
 
         quote! {
-            fn update_archetype<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn update<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
             where
                 Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
             {
@@ -109,12 +89,12 @@ impl Archetype {
             let typename = field.typename();
 
             quote! {
-                <#typename as ::erm::archetype::Archetype<#database>>::remove_archetype(query);
+                <#typename as ::erm::tables::Removeable<#database>>::remove(query);
             }
         });
 
         quote! {
-            fn remove_archetype<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn remove<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
             where
                 Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
             {
@@ -157,12 +137,12 @@ impl Archetype {
         let binds = self.fields.iter().map(|field| {
             let field_name = field.ident();
             quote! {
-                let query = self.#field_name.serialize_components(query);
+                let query = self.#field_name.serialize(query);
             }
         });
 
         quote! {
-            fn serialize_components<'q>(
+            fn serialize<'q>(
                 &'q self,
                 query: #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>>,
             ) -> #sqlx::query::Query<'q, #database, <#database as #sqlx::Database>::Arguments<'q>> {
@@ -180,7 +160,7 @@ impl Archetype {
             let typename = field.typename();
 
             quote! {
-                let #name = <#typename as ::erm::archetype::Archetype<#database>>::deserialize_components(row);
+                let #name = <#typename as ::erm::serialization::Deserializeable<#database>>::deserialize(row);
             }
         });
 
@@ -193,7 +173,7 @@ impl Archetype {
         });
 
         quote! {
-            fn deserialize_components(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
+            fn deserialize(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
                 #(#components)*
 
                 let archetype = #archetype_name {

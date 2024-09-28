@@ -93,6 +93,8 @@ pub mod cte;
 pub mod entity;
 pub mod reflect;
 pub mod row;
+pub mod serialization;
+pub mod tables;
 
 #[cfg(feature = "bundled")]
 pub use ::sqlx;
@@ -106,4 +108,6 @@ pub mod prelude {
     pub use crate::component::{ColumnDefinition, Component};
     pub use crate::condition;
     pub use crate::reflect::Reflect;
+    pub use crate::serialization::{Deserializeable, Serializable};
+    pub use crate::tables::Removeable;
 }

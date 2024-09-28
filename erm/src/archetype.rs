@@ -2,14 +2,16 @@ use std::future::Future;
 
 use async_stream::stream;
 use futures::Stream;
-use sqlx::{query::Query, ColumnIndex, Database, Executor, IntoArguments, Pool};
+use sqlx::{ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 use crate::{
     component::Component,
     condition::Condition,
     cte::{CommonTableExpression, Filter, Select},
     entity::EntityPrefixedQuery,
-    row::{OffsetRow, Rowed},
+    row::Rowed,
+    serialization::{Deserializeable, Serializable},
+    tables::Removeable,
 };
 
 pub trait DatabasePlaceholder {
@@ -27,29 +29,7 @@ impl DatabasePlaceholder for sqlx::Postgres {
     const PLACEHOLDER: char = '$';
 }
 
-pub trait Archetype<DB: Database>: Sized {
-    fn create_component_tables<'a, Entity>(
-        pool: &'a Pool<DB>,
-    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a
-    where
-        Entity: sqlx::Type<DB>;
-
-    fn insert_archetype<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
-
-    fn update_archetype<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
-
-    fn remove_archetype<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
-
+pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
     fn list_statement() -> impl CommonTableExpression;
 
     fn get_statement() -> impl CommonTableExpression {
@@ -117,7 +97,7 @@ pub trait Archetype<DB: Database>: Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Send,
+        Self: Serializable<DB> + Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -126,7 +106,7 @@ pub trait Archetype<DB: Database>: Sized {
     {
         let mut inserts = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
 
-        <Self as Archetype<DB>>::insert_archetype(&self, &mut inserts);
+        <Self as Serializable<DB>>::insert(&self, &mut inserts);
 
         async move {
             let mut tx = pool.begin().await.unwrap();
@@ -144,7 +124,7 @@ pub trait Archetype<DB: Database>: Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Send,
+        Self: Serializable<DB> + Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -153,7 +133,7 @@ pub trait Archetype<DB: Database>: Sized {
     {
         let mut inserts = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
 
-        <Self as Archetype<DB>>::update_archetype(&self, &mut inserts);
+        <Self as Serializable<DB>>::update(&self, &mut inserts);
 
         async move {
             let mut tx = pool.begin().await.unwrap();
@@ -170,7 +150,7 @@ pub trait Archetype<DB: Database>: Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Send,
+        Self: Removeable<DB> + Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -179,7 +159,7 @@ pub trait Archetype<DB: Database>: Sized {
     {
         let mut removes = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
 
-        <Self as Archetype<DB>>::remove_archetype(&mut removes);
+        <Self as Removeable<DB>>::remove(&mut removes);
 
         async move {
             let mut tx = pool.begin().await.unwrap();
@@ -190,59 +170,12 @@ pub trait Archetype<DB: Database>: Sized {
             tx.commit().await.unwrap();
         }
     }
-
-    fn serialize_components<'q>(
-        &'q self,
-        query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
-    ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>;
-
-    fn deserialize_components(
-        row: &mut OffsetRow<<DB as Database>::Row>,
-    ) -> Result<Self, sqlx::Error>;
 }
 
 impl<T, DB: Database> Archetype<DB> for T
 where
     T: Component<DB>,
 {
-    fn create_component_tables<'a, Entity>(
-        pool: &'a Pool<DB>,
-    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a
-    where
-        Entity: sqlx::Type<DB>,
-    {
-        async move {
-            <T as Component<DB>>::create_component_table::<Entity>(pool).await?;
-
-            Ok(())
-        }
-    }
-
-    fn insert_archetype<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
-    {
-        <Self as Component<DB>>::insert_component(&self, query);
-    }
-
-    fn update_archetype<'query, Entity>(
-        &'query self,
-        query: &mut EntityPrefixedQuery<'query, DB, Entity>,
-    ) where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
-    {
-        <Self as Component<DB>>::update_component(&self, query);
-    }
-
-    fn remove_archetype<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
-    {
-        <Self as Component<DB>>::remove_component(query);
-    }
-
     fn list_statement() -> impl CommonTableExpression {
         Select {
             optional: false,
@@ -252,19 +185,6 @@ where
                 .map(|column| column.name().to_string())
                 .collect(),
         }
-    }
-
-    fn serialize_components<'q>(
-        &'q self,
-        query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
-    ) -> Query<'q, DB, <DB as Database>::Arguments<'q>> {
-        <Self as Component<DB>>::serialize_fields(self, query)
-    }
-
-    fn deserialize_components(
-        row: &mut OffsetRow<<DB as Database>::Row>,
-    ) -> Result<Self, sqlx::Error> {
-        <Self as Component<DB>>::deserialize_fields(row)
     }
 }
 
@@ -296,79 +216,8 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn create_component_tables<'a, Entity>(
-                pool: &'a Pool<$db>,
-            ) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a where Entity: sqlx::Type<$db> {
-
-                async move {
-                    $(
-                        <$list as Archetype<$db>>::create_component_tables::<Entity>(pool).await?;
-                    )*
-
-                    Ok(())
-                }
-            }
-
-            fn insert_archetype<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, $db, Entity>)
-            where
-                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
-            {
-                $(
-                    {
-                        self.$index.insert_archetype(query);
-                    }
-                )*
-            }
-
-            fn update_archetype<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, $db, Entity>)
-            where
-                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
-            {
-                $(
-                    {
-                        self.$index.update_archetype(query);
-                    }
-                )*
-            }
-
-            fn remove_archetype<'query, Entity>(
-                query: &mut EntityPrefixedQuery<'query, $db, Entity>,
-            ) where
-                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query,
-            {
-                $(
-                    {
-                        #[allow(unused)]
-                        <$list as Archetype<$db>>::remove_archetype(query);
-                    }
-                )*
-            }
-
             fn list_statement() -> impl CommonTableExpression {
                 expand_inner_join!($db, $($list),*)
-            }
-
-            fn serialize_components<'q>(
-                &'q self,
-                query: Query<'q, $db, <$db as Database>::Arguments<'q>>,
-            ) -> Query<'q, $db, <$db as Database>::Arguments<'q>> {
-                $(
-                    #[allow(unused)]
-                    const $list: () = ();
-                    let query = self.$index.serialize_components(query);
-                )*
-
-                query
-            }
-
-            fn deserialize_components(
-                row: &mut OffsetRow<<$db as Database>::Row>,
-            ) -> Result<Self, sqlx::Error> {
-                Ok((
-                    $(
-                        <$list as Archetype<$db>>::deserialize_components(row)?,
-                    )*
-                ))
             }
         }
     };

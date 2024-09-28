@@ -9,6 +9,8 @@ use uuid::Uuid;
 use crate::{
     archetype::Archetype,
     condition::{All, Condition},
+    prelude::{Component, Serializable},
+    tables::Removeable,
 };
 
 #[cfg(feature = "sqlite")]
@@ -46,14 +48,16 @@ where
         + Send
         + 'static,
 {
-    fn register<T>(&self) -> impl Future<Output = Result<(), sqlx::Error>>
+    fn register<T>(
+        &self,
+    ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>>
     where
-        T: Archetype<DB>;
+        T: Component<DB>;
 
     fn spawn<'a, T>(&'a self, components: &'a T) -> impl Future<Output = Entity> + 'a
     where
         Entity: GenerateNew,
-        T: Archetype<DB> + Unpin + Send + 'static,
+        T: Archetype<DB> + Serializable<DB> + Unpin + Send + 'static,
     {
         async move {
             let entity = Entity::generate_new();
@@ -70,7 +74,7 @@ where
     where
         'a: 'b,
         'b: 'c,
-        T: Archetype<DB> + Unpin + Send + 'static;
+        T: Archetype<DB> + Serializable<DB> + Unpin + Send + 'static;
 
     fn update<'a, T>(
         &'a self,
@@ -78,11 +82,11 @@ where
         components: &'a T,
     ) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<DB> + Unpin + Send + 'static;
+        T: Archetype<DB> + Serializable<DB> + Unpin + Send + 'static;
 
     fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<DB> + Unpin + Send + 'static;
+        T: Archetype<DB> + Removeable<DB> + Unpin + Send + 'static;
 
     fn list<T, Cond>(&self, cond: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
     where
