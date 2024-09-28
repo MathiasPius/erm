@@ -25,16 +25,15 @@ async fn main() {
         .insert(&jimothy, &(Name("Jimothy".to_string()), Age(10)))
         .await;
 
+    // It's rude to ask a woman her age!
     let andrea = 2;
-    backend
-        .insert(&andrea, &(Name("Andrea".to_string()), Age(32)))
-        .await;
+    backend.insert(&andrea, &(Name("Andrea".to_string()))).await;
 
     // Let's name an Archetype instead of just relying on a tuple.
     #[derive(Archetype, Debug)]
     struct Person {
         name: Name,
-        age: Age,
+        age: Option<Age>,
     }
 
     // List all the people we know
@@ -52,7 +51,7 @@ async fn main() {
     //             name: Name(
     //                 "Jimothy",
     //             ),
-    //             age: Age(
+    //             age: Some(Age(
     //                 10,
     //             ),
     //         },
@@ -69,22 +68,4 @@ async fn main() {
     //         },
     //     ),
     // ]
-
-    backend.remove::<Person>(&jimothy).await;
-
-    let remaining_names = backend
-        .list_all::<Name>()
-        .try_collect::<Vec<_>>()
-        .await
-        .unwrap();
-
-    // Check that only Andrea is left.
-    assert_eq!(remaining_names.len(), 1);
-    println!("{:#?}", remaining_names[0].1);
-    // Name(
-    //     "Andrea",
-    // )
-
-    // Fetch Andrea's age
-    assert_eq!(backend.get::<Age>(&andrea).await.unwrap(), Age(32));
 }

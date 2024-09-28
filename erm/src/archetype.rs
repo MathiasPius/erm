@@ -79,6 +79,8 @@ pub trait Archetype<DB: Database>: Sized {
                 condition.serialize()
             );
 
+            println!("{sql}");
+
             let query = condition.bind(sqlx::query_as::<DB, Rowed<Entity, Self>>(&sql));
 
             for await row in query.fetch(pool) {
@@ -243,6 +245,7 @@ where
 
     fn list_statement() -> impl CommonTableExpression {
         Select {
+            optional: false,
             table: <T as Component<DB>>::table().to_string(),
             columns: <T as Component<DB>>::columns()
                 .into_iter()
@@ -268,7 +271,8 @@ where
 #[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 macro_rules! expand_inner_join {
     ($db:ty, $first:ident, $second:ident) => {
-        crate::cte::InnerJoin {
+        crate::cte::Join {
+            direction: "inner",
             left:
                 Box::new(<$first as Archetype<$db>>::list_statement()),
             right:
@@ -277,7 +281,8 @@ macro_rules! expand_inner_join {
     };
 
     ($db:ty, $first:ident, $($list:ident),*) => {
-        crate::cte::InnerJoin {
+        crate::cte::Join {
+            direction: "inner",
             left: Box::new(<$first as Archetype<$db>>::list_statement()),
             right: Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
         }

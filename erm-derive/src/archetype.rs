@@ -135,7 +135,8 @@ impl Archetype {
             let field = field.typename();
 
             quote! {
-                let join = ::erm::cte::InnerJoin {
+                let join = ::erm::cte::Join {
+                    direction: "inner",
                     left: Box::new(join),
                     right: Box::new(<#field as ::erm::archetype::Archetype<#database>>::list_statement()),
                 }

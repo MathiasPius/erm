@@ -17,9 +17,9 @@ pub trait CommonTableExpression: 'static {
         let mut joins = self
             .joins()
             .iter()
-            .map(|right| {
+            .map(|(direction, right)| {
                 format!(
-                    "    inner join\n      {right}\n    on\n      {left}.entity == {right}.entity"
+                    "    {direction} join\n      {right}\n    on\n      {left}.entity == {right}.entity"
                 )
             })
             .collect::<Vec<_>>()
@@ -48,7 +48,7 @@ pub trait CommonTableExpression: 'static {
         Vec::new()
     }
 
-    fn joins(&self) -> Vec<Table> {
+    fn joins(&self) -> Vec<(&'static str, Table)> {
         Vec::new()
     }
 
@@ -58,6 +58,7 @@ pub trait CommonTableExpression: 'static {
 }
 
 pub struct Select {
+    pub optional: bool,
     pub columns: Vec<Column>,
     pub table: Table,
 }
@@ -95,17 +96,18 @@ impl CommonTableExpression for Filter {
         wheres
     }
 
-    fn joins(&self) -> Vec<Table> {
+    fn joins(&self) -> Vec<(&'static str, Table)> {
         self.inner.joins()
     }
 }
 
-pub struct InnerJoin {
+pub struct Join {
+    pub direction: &'static str,
     pub left: Box<dyn CommonTableExpression>,
     pub right: Box<dyn CommonTableExpression>,
 }
 
-impl CommonTableExpression for InnerJoin {
+impl CommonTableExpression for Join {
     fn columns(&self) -> Vec<(Table, Column)> {
         self.left
             .columns()
@@ -118,10 +120,10 @@ impl CommonTableExpression for InnerJoin {
         self.left.primary_table()
     }
 
-    fn joins(&self) -> Vec<Table> {
+    fn joins(&self) -> Vec<(&'static str, Table)> {
         let mut joins = self.right.joins();
         joins.append(&mut self.left.joins());
-        joins.push(self.right.primary_table());
+        joins.push((self.direction, self.right.primary_table()));
 
         joins
     }
