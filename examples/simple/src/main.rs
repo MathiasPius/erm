@@ -16,6 +16,10 @@ async fn main() {
     backend.register::<Name>().await.unwrap();
     backend.register::<Age>().await.unwrap();
 
+    // Create our entities: Jimothy and Andrea
+    //
+    // Since we're just using i64s as our "Entity", our entities
+    // are actually just numbers.
     let jimothy = 1;
     backend
         .insert(&jimothy, &(Name("Jimothy".to_string()), Age(10)))
