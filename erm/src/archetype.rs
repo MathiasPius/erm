@@ -5,7 +5,6 @@ use futures::Stream;
 use sqlx::{ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 use crate::{
-    component::Component,
     condition::Condition,
     cte::{CommonTableExpression, Filter, Select},
     entity::EntityPrefixedQuery,
@@ -172,17 +171,21 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
     }
 }
 
-impl<T, DB: Database> Archetype<DB> for T
+impl<T, DB: Database> Archetype<DB> for Option<T>
 where
-    T: Component<DB>,
+    T: Archetype<DB>,
+    usize: ColumnIndex<<DB as Database>::Row>,
 {
     fn list_statement() -> impl CommonTableExpression {
+        let inner = <T as Archetype<DB>>::list_statement();
+
         Select {
-            optional: false,
-            table: <T as Component<DB>>::table().to_string(),
-            columns: <T as Component<DB>>::columns()
+            optional: true,
+            table: inner.primary_table(),
+            columns: inner
+                .columns()
                 .into_iter()
-                .map(|column| column.name().to_string())
+                .map(|(_, column)| column)
                 .collect(),
         }
     }
@@ -192,7 +195,6 @@ where
 macro_rules! expand_inner_join {
     ($db:ty, $first:ident, $second:ident) => {
         crate::cte::Join {
-            direction: "inner",
             left:
                 Box::new(<$first as Archetype<$db>>::list_statement()),
             right:
@@ -202,7 +204,6 @@ macro_rules! expand_inner_join {
 
     ($db:ty, $first:ident, $($list:ident),*) => {
         crate::cte::Join {
-            direction: "inner",
             left: Box::new(<$first as Archetype<$db>>::list_statement()),
             right: Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
         }

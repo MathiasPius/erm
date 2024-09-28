@@ -13,13 +13,13 @@ impl Archetype {
     pub fn implementation(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let archetype_name = &self.typename;
 
-        let insert = self.insert(sqlx, database);
-        let update = self.update(database);
+        // let insert = self.insert(sqlx, database);
+        // let update = self.update(database);
         let remove = self.remove(sqlx, database);
 
         let select = self.select(database);
 
-        let serializer = self.component_serializer(sqlx, database);
+        // let serializer = self.component_serializer(sqlx, database);
         let deserializer = self.component_deserializer(sqlx, database);
 
         quote! {
@@ -28,11 +28,11 @@ impl Archetype {
                 #select
             }
 
-            impl ::erm::serialization::Serializable<#database> for #archetype_name {
-                #serializer
-                #insert
-                #update
-            }
+            // impl ::erm::serialization::Serializable<#database> for #archetype_name {
+            //     #serializer
+            //     #insert
+            //     #update
+            // }
 
             impl ::erm::serialization::Deserializeable<#database> for #archetype_name {
                 #deserializer
@@ -44,6 +44,7 @@ impl Archetype {
         }
     }
 
+    /*
     fn insert(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
             let name = field.ident();
@@ -83,6 +84,7 @@ impl Archetype {
             }
         }
     }
+     */
 
     fn remove(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let sub_archetypes = self.fields.iter().map(|field| {
@@ -116,7 +118,6 @@ impl Archetype {
 
             quote! {
                 let join = ::erm::cte::Join {
-                    direction: "inner",
                     left: Box::new(join),
                     right: Box::new(<#field as ::erm::archetype::Archetype<#database>>::list_statement()),
                 }
@@ -133,6 +134,7 @@ impl Archetype {
         }
     }
 
+    /*
     fn component_serializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let binds = self.fields.iter().map(|field| {
             let field_name = field.ident();
@@ -152,6 +154,7 @@ impl Archetype {
             }
         }
     }
+     */
 
     fn component_deserializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         let archetype_name = &self.typename;

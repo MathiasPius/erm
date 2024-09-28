@@ -1,4 +1,4 @@
-use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row};
+use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row, ValueRef};
 
 use crate::serialization::Deserializeable;
 
@@ -14,6 +14,15 @@ impl<'r, R: Row> OffsetRow<'r, R> {
 
     pub fn skip(&mut self, offset: usize) {
         self.offset += offset;
+    }
+
+    pub fn is_null(&self) -> bool
+    where
+        usize: ColumnIndex<R>,
+    {
+        self.row
+            .try_get_raw(self.offset)
+            .is_ok_and(|field| field.is_null())
     }
 }
 

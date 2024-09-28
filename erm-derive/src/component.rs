@@ -22,6 +22,7 @@ impl Component {
         let statements = self.statements(placeholder_char);
         let table = self.table();
         let columns = self.columns(sqlx, database);
+        let archetype = self.archetype(database);
         let table_creator = self.table_creator(sqlx, database);
         let remove = self.remove(sqlx, database);
         let insert = self.insert(sqlx, database);
@@ -35,6 +36,10 @@ impl Component {
                 #table
                 #columns
                 #table_creator
+            }
+
+            impl ::erm::archetype::Archetype<#database> for #component_name {
+                #archetype
             }
 
             impl ::erm::serialization::Serializable<#database> for #component_name {
@@ -90,6 +95,21 @@ impl Component {
             const INSERT: &'static str = #insert;
             const UPDATE: &'static str = #update;
             const DELETE: &'static str = #delete;
+        }
+    }
+
+    fn archetype(&self, database: &TokenStream) -> TokenStream {
+        quote! {
+            fn list_statement() -> impl ::erm::cte::CommonTableExpression {
+                ::erm::cte::Select {
+                    optional: false,
+                    table: <Self as ::erm::component::Component<#database>>::table().to_string(),
+                    columns: <Self as ::erm::component::Component<#database>>::columns()
+                        .into_iter()
+                        .map(|column| column.name().to_string())
+                        .collect(),
+                }
+            }
         }
     }
 

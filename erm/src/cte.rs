@@ -44,6 +44,10 @@ pub trait CommonTableExpression: 'static {
         )
     }
 
+    fn direction(&self) -> &'static str {
+        "inner"
+    }
+
     fn columns(&self) -> Vec<(Table, Column)> {
         Vec::new()
     }
@@ -64,6 +68,14 @@ pub struct Select {
 }
 
 impl CommonTableExpression for Select {
+    fn direction(&self) -> &'static str {
+        if self.optional {
+            "full outer"
+        } else {
+            "inner"
+        }
+    }
+
     fn columns(&self) -> Vec<(Table, Column)> {
         self.columns
             .iter()
@@ -102,7 +114,6 @@ impl CommonTableExpression for Filter {
 }
 
 pub struct Join {
-    pub direction: &'static str,
     pub left: Box<dyn CommonTableExpression>,
     pub right: Box<dyn CommonTableExpression>,
 }
@@ -120,10 +131,14 @@ impl CommonTableExpression for Join {
         self.left.primary_table()
     }
 
+    fn direction(&self) -> &'static str {
+        self.right.direction()
+    }
+
     fn joins(&self) -> Vec<(&'static str, Table)> {
         let mut joins = self.right.joins();
         joins.append(&mut self.left.joins());
-        joins.push((self.direction, self.right.primary_table()));
+        joins.push((self.direction(), self.right.primary_table()));
 
         joins
     }

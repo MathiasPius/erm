@@ -1,4 +1,4 @@
-use sqlx::{query::Query, Database};
+use sqlx::{query::Query, ColumnIndex, Database};
 
 use crate::{entity::EntityPrefixedQuery, row::OffsetRow, tables::Removeable};
 
@@ -21,9 +21,17 @@ pub trait Serializable<DB: Database>: Sized {
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 }
 
-impl<T: Deserializeable<DB>, DB: Database> Deserializeable<DB> for Option<T> {
+impl<T: Deserializeable<DB>, DB: Database> Deserializeable<DB> for Option<T>
+where
+    usize: ColumnIndex<<DB as Database>::Row>,
+{
     fn deserialize(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error> {
-        Ok(<T as Deserializeable<DB>>::deserialize(row).ok())
+        if row.is_null() {
+            row.skip(1);
+            Ok(None)
+        } else {
+            <T as Deserializeable<DB>>::deserialize(row).map(Some)
+        }
     }
 }
 
