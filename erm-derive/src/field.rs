@@ -32,6 +32,16 @@ impl Field {
         }
     }
 
+    pub fn field_name(&self) -> TokenStream {
+        match self {
+            Field::Numbered { ident, .. } => {
+                let ident = Ident::new(&format!("self_{}", ident), ident.span());
+                quote! { #ident }
+            }
+            Field::Named { ident, .. } => ident.clone(),
+        }
+    }
+
     pub fn typename(&self) -> &Type {
         match self {
             Field::Numbered { typename, .. } | Field::Named { typename, .. } => &typename,
@@ -148,7 +158,7 @@ impl Field {
     }
 
     pub fn reflected_column(&self) -> TokenStream {
-        let name = self.ident();
+        let name = self.field_name();
         let typename = self.typename();
 
         if let Some(intermediate) = self.intermediate() {

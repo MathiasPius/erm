@@ -117,6 +117,160 @@ where
     }
 }
 
+pub struct GreaterThan<Parameter> {
+    column: &'static str,
+    parameter: Parameter,
+}
+
+impl<Parameter> GreaterThan<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
+        Self {
+            column,
+            parameter: value,
+        }
+    }
+}
+
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for GreaterThan<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
+            "{} > {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
+    }
+
+    fn bind<T>(
+        self,
+        query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+    where
+        DB: Database,
+    {
+        query.bind(self.parameter)
+    }
+}
+
+pub struct LessThan<Parameter> {
+    column: &'static str,
+    parameter: Parameter,
+}
+
+impl<Parameter> LessThan<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
+        Self {
+            column,
+            parameter: value,
+        }
+    }
+}
+
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for LessThan<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
+            "{} < {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
+    }
+
+    fn bind<T>(
+        self,
+        query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+    where
+        DB: Database,
+    {
+        query.bind(self.parameter)
+    }
+}
+
+pub struct GreaterThanOrEqual<Parameter> {
+    column: &'static str,
+    parameter: Parameter,
+}
+
+impl<Parameter> GreaterThanOrEqual<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
+        Self {
+            column,
+            parameter: value,
+        }
+    }
+}
+
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB>
+    for GreaterThanOrEqual<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
+            "{} >= {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
+    }
+
+    fn bind<T>(
+        self,
+        query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+    where
+        DB: Database,
+    {
+        query.bind(self.parameter)
+    }
+}
+
+pub struct LessThanOrEqual<Parameter> {
+    column: &'static str,
+    parameter: Parameter,
+}
+
+impl<Parameter> LessThanOrEqual<Parameter> {
+    pub const fn new(column: &'static str, value: Parameter) -> Self {
+        Self {
+            column,
+            parameter: value,
+        }
+    }
+}
+
+impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB>
+    for LessThanOrEqual<Parameter>
+where
+    Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
+{
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
+            "{} <= {}",
+            self.column,
+            <DB as DatabasePlaceholder>::PLACEHOLDER
+        )
+    }
+
+    fn bind<T>(
+        self,
+        query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    ) -> QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+    where
+        DB: Database,
+    {
+        query.bind(self.parameter)
+    }
+}
+
 pub struct And<A, B> {
     a: A,
     b: B,

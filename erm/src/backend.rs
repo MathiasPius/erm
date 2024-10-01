@@ -167,8 +167,6 @@ where
             sql.push_str(" where ");
             self.condition.serialize(&mut sql).unwrap();
 
-            println!("{sql}");
-
             let query = self.condition.bind(sqlx::query_as::<DB, Rowed<Entity, T>>(&sql));
 
             for await row in query.fetch(&self.pool) {
