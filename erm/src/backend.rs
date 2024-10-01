@@ -1,15 +1,18 @@
-use std::future::Future;
+use std::{future::Future, marker::PhantomData};
 
+use async_stream::stream;
 use futures::Stream;
-use sqlx::Database;
+use sqlx::{ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 #[cfg(feature = "uuid")]
 use uuid::Uuid;
 
 use crate::{
     archetype::Archetype,
-    condition::{All, Condition},
-    prelude::{Component, Serializable},
+    condition::{All, And, Condition, Or},
+    cte::{Filter, With, Without},
+    prelude::{Component, Deserializeable, Serializable},
+    row::Rowed,
     tables::Removeable,
 };
 
@@ -88,19 +91,89 @@ where
     where
         T: Archetype<DB> + Removeable<DB> + Unpin + Send + 'static;
 
-    fn list<T, Cond>(&self, cond: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
-    where
-        T: Archetype<DB> + Unpin + Send + 'static,
-        Cond: for<'c> Condition<'c, DB>;
-
-    fn list_all<T>(&self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
-    where
-        T: Archetype<DB> + Unpin + Send + 'static,
-    {
-        self.list(All)
-    }
+    fn list<T>(&self) -> List<DB, Entity, T, (), All>;
 
     fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
     where
-        T: Archetype<DB> + Unpin + Send + 'static;
+        T: Deserializeable<DB> + Unpin + Send + 'static;
+}
+
+pub struct List<DB, Entity, T, F = (), C = All>
+where
+    DB: Database,
+{
+    pool: Pool<DB>,
+    _data: PhantomData<(Entity, T, F)>,
+    condition: C,
+}
+
+impl<DB, Entity, T, F, C> List<DB, Entity, T, F, C>
+where
+    DB: Database,
+{
+    pub fn with<U: Deserializeable<DB>>(self) -> List<DB, Entity, T, (With<U>, F), C> {
+        List {
+            pool: self.pool,
+            _data: PhantomData,
+            condition: self.condition,
+        }
+    }
+
+    pub fn without<U: Deserializeable<DB>>(self) -> List<DB, Entity, T, (Without<U>, F), C> {
+        List {
+            pool: self.pool,
+            _data: PhantomData,
+            condition: self.condition,
+        }
+    }
+
+    pub fn and<'q, Cond: Condition<'q, DB>>(
+        self,
+        condition: Cond,
+    ) -> List<DB, Entity, T, F, And<C, Cond>> {
+        List {
+            pool: self.pool,
+            _data: PhantomData,
+            condition: And::new(self.condition, condition),
+        }
+    }
+
+    pub fn or<'q, Cond: Condition<'q, DB>>(
+        self,
+        condition: Cond,
+    ) -> List<DB, Entity, T, F, Or<C, Cond>> {
+        List {
+            pool: self.pool,
+            _data: PhantomData,
+            condition: Or::new(self.condition, condition),
+        }
+    }
+}
+
+impl<DB, Entity, T, F, Cond> List<DB, Entity, T, F, Cond>
+where
+    DB: Database,
+    T: Deserializeable<DB> + Unpin + Send,
+    F: Filter<DB>,
+    Cond: for<'c> Condition<'c, DB>,
+    for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
+    for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
+    for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
+    usize: ColumnIndex<<DB as sqlx::Database>::Row>,
+{
+    pub fn fetch(self) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>> {
+        stream! {
+            let mut sql = crate::cte::serialize(<F as Filter<DB>>::cte(<T as Deserializeable<DB>>::cte()).as_ref()).unwrap();
+            sql.push_str(" where ");
+            self.condition.serialize(&mut sql).unwrap();
+
+            println!("{sql}");
+
+            let query = self.condition.bind(sqlx::query_as::<DB, Rowed<Entity, T>>(&sql));
+
+            for await row in query.fetch(&self.pool) {
+                yield row.map(|rowed| (rowed.entity, rowed.inner))
+            }
+        }
+    }
 }

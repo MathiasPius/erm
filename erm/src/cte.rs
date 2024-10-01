@@ -1,145 +1,391 @@
-pub type Table = String;
-pub type Column = String;
+use std::marker::PhantomData;
+use std::{collections::BTreeSet, fmt::Write};
 
-pub trait CommonTableExpression: 'static {
-    fn primary_table(&self) -> Table;
+use std::fmt::Result;
 
-    fn serialize(&self, placeholder: char) -> String {
-        let columns: String = self
-            .columns()
-            .into_iter()
-            .map(|(table, column)| format!("  {table}.{column} as {column}"))
-            .collect::<Vec<_>>()
-            .join(",\n    ");
+use sqlx::Database;
 
-        let left = self.primary_table();
+use crate::prelude::Deserializeable;
 
-        let mut joins = self
-            .joins()
-            .iter()
-            .map(|(direction, right)| {
-                format!(
-                    "    {direction} join\n      {right}\n    on\n      {left}.entity == {right}.entity"
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if !joins.is_empty() {
-            joins = format!("\n{joins}");
-        }
-
-        let mut wheres = self
-            .wheres()
-            .into_iter()
-            .map(|(table, column)| format!("{table}.{column} = {placeholder}"))
-            .collect::<Vec<_>>()
-            .join("\n      and ");
-        if !wheres.is_empty() {
-            wheres = format!("\n    where\n      {wheres}");
-        }
-
-        format!(
-            "    select\n      {left}.entity as entity,\n    {columns}\n    from\n      {left}{joins}{wheres}"
-        )
-    }
-
-    fn direction(&self) -> &'static str {
-        "inner"
-    }
-
-    fn columns(&self) -> Vec<(Table, Column)> {
-        Vec::new()
-    }
-
-    fn joins(&self) -> Vec<(&'static str, Table)> {
-        Vec::new()
-    }
-
-    fn wheres(&self) -> Vec<(Table, Column)> {
-        Vec::new()
+pub trait CommonTableExpression: std::fmt::Debug {
+    fn table_name(&self, f: &mut dyn Write) -> Result;
+    fn columns(&self, f: &mut dyn Write) -> Result;
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>];
+    fn serialize(&self, f: &mut dyn Write) -> Result;
+    fn optional(&self) -> bool {
+        false
     }
 }
 
-pub struct Select {
-    pub optional: bool,
-    pub columns: Vec<Column>,
-    pub table: Table,
+#[derive(Debug)]
+pub struct Extract {
+    pub table: &'static str,
+    pub columns: &'static [&'static str],
 }
 
-impl CommonTableExpression for Select {
-    fn direction(&self) -> &'static str {
-        if self.optional {
-            "full outer"
-        } else {
-            "inner"
+impl CommonTableExpression for Extract {
+    fn table_name(&self, f: &mut dyn Write) -> Result {
+        write!(f, "{}", self.table)
+    }
+
+    fn columns(&self, f: &mut dyn Write) -> Result {
+        for column in self.columns {
+            write!(f, ",\n      __cte_{}__{}", self.table, column)?
         }
+
+        Ok(())
     }
 
-    fn columns(&self) -> Vec<(Table, Column)> {
-        self.columns
-            .iter()
-            .map(|column| (self.primary_table(), column.clone()))
-            .collect()
+    fn serialize(&self, f: &mut dyn Write) -> Result {
+        write!(
+            f,
+            "    select\n      entity as __cte_{table}__entity",
+            table = self.table
+        )?;
+        for column in self.columns {
+            write!(
+                f,
+                ",\n      {column} as __cte_{table}__{column}",
+                table = self.table,
+                column = column
+            )?
+        }
+        write!(f, "\n    from\n      ")?;
+        self.table_name(f)
     }
 
-    fn primary_table(&self) -> Table {
-        self.table.clone()
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>] {
+        &[]
     }
 }
 
-pub struct Filter {
+#[derive(Debug)]
+pub struct Optional {
     pub inner: Box<dyn CommonTableExpression>,
-    pub clause: Column,
 }
 
-impl CommonTableExpression for Filter {
-    fn columns(&self) -> Vec<(Table, Column)> {
-        self.inner.columns()
+impl CommonTableExpression for Optional {
+    fn table_name(&self, f: &mut dyn Write) -> Result {
+        self.inner.table_name(f)
     }
 
-    fn primary_table(&self) -> Table {
-        self.inner.primary_table()
+    fn columns(&self, f: &mut dyn Write) -> Result {
+        self.inner.columns(f)
     }
 
-    fn wheres(&self) -> Vec<(Table, Column)> {
-        let mut wheres = self.inner.wheres();
-        wheres.push((self.primary_table(), self.clause.clone()));
-        wheres
+    fn serialize(&self, f: &mut dyn Write) -> Result {
+        self.inner.serialize(f)
     }
 
-    fn joins(&self) -> Vec<(&'static str, Table)> {
-        self.inner.joins()
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>] {
+        self.inner.dependencies()
+    }
+
+    fn optional(&self) -> bool {
+        true
     }
 }
 
-pub struct Join {
-    pub left: Box<dyn CommonTableExpression>,
-    pub right: Box<dyn CommonTableExpression>,
+#[derive(Debug)]
+pub struct Merge {
+    pub tables: Vec<Box<dyn CommonTableExpression>>,
 }
 
-impl CommonTableExpression for Join {
-    fn columns(&self) -> Vec<(Table, Column)> {
-        self.left
-            .columns()
-            .into_iter()
-            .chain(&mut self.right.columns().into_iter())
-            .collect::<Vec<_>>()
+impl CommonTableExpression for Merge {
+    fn table_name(&self, f: &mut dyn Write) -> Result {
+        let mut tables = self.tables.iter();
+        let first = tables.next().unwrap();
+        first.table_name(f)?;
+
+        for table in tables {
+            write!(f, "_")?;
+            table.table_name(f)?;
+        }
+
+        Ok(())
     }
 
-    fn primary_table(&self) -> Table {
-        self.left.primary_table()
+    fn columns(&self, f: &mut dyn Write) -> Result {
+        for inner in &self.tables {
+            inner.columns(f)?;
+        }
+
+        Ok(())
     }
 
-    fn direction(&self) -> &'static str {
-        self.right.direction()
+    fn serialize(&self, f: &mut dyn Write) -> Result {
+        let mut tables = self.tables.iter();
+        let first = tables.next().unwrap();
+
+        write!(f, "{}", "    select\n      __cte_")?;
+        first.table_name(f)?;
+        write!(f, "__entity")?;
+        self.columns(f)?;
+        write!(f, "{}", "\n    from\n      __cte_")?;
+        first.table_name(f)?;
+
+        for table in tables {
+            if table.optional() {
+                write!(f, "\n    left join\n      __cte_")?;
+            } else {
+                write!(f, "\n    inner join\n      __cte_")?;
+            }
+            table.table_name(f)?;
+            write!(f, "\n    on\n      __cte_")?;
+            first.table_name(f)?;
+            write!(f, "__entity = __cte_")?;
+            table.table_name(f)?;
+            write!(f, "__entity")?;
+        }
+
+        Ok(())
     }
 
-    fn joins(&self) -> Vec<(&'static str, Table)> {
-        let mut joins = self.right.joins();
-        joins.append(&mut self.left.joins());
-        joins.push((self.direction(), self.right.primary_table()));
-
-        joins
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>] {
+        &self.tables
     }
+}
+
+#[derive(Debug)]
+pub struct Include {
+    pub inner: [Box<dyn CommonTableExpression>; 2],
+}
+
+impl CommonTableExpression for Include {
+    fn table_name(&self, f: &mut dyn Write) -> Result {
+        self.inner[0].table_name(f)?;
+        write!(f, "_including_")?;
+        self.inner[1].table_name(f)
+    }
+
+    fn columns(&self, f: &mut dyn Write) -> Result {
+        self.inner[0].columns(f)
+    }
+
+    fn serialize(&self, f: &mut dyn Write) -> Result {
+        write!(f, "    select\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "__entity")?;
+        self.columns(f)?;
+        write!(f, "\n    from\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "\n    inner join\n      __cte_")?;
+        self.inner[1].table_name(f)?;
+        write!(f, "\n    on\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "__entity = __cte_")?;
+        self.inner[1].table_name(f)?;
+        write!(f, "__entity")
+    }
+
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>] {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+pub struct Exclude {
+    pub inner: [Box<dyn CommonTableExpression>; 2],
+}
+
+impl CommonTableExpression for Exclude {
+    fn table_name(&self, f: &mut dyn Write) -> Result {
+        self.inner[0].table_name(f)?;
+        write!(f, "_excluding_")?;
+        self.inner[1].table_name(f)
+    }
+
+    fn columns(&self, f: &mut dyn Write) -> Result {
+        self.inner[0].columns(f)
+    }
+
+    fn serialize(&self, f: &mut dyn Write) -> Result {
+        write!(f, "{}", "    select\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "__entity")?;
+        self.columns(f)?;
+        write!(f, "\n    from\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "\n    left join\n      __cte_")?;
+        self.inner[1].table_name(f)?;
+        write!(f, "\n    on\n      __cte_")?;
+        self.inner[0].table_name(f)?;
+        write!(f, "__entity = __cte_")?;
+        self.inner[1].table_name(f)?;
+        write!(f, "__entity\n    where __cte_")?;
+        self.inner[1].table_name(f)?;
+        write!(f, "__entity is null")
+    }
+
+    fn dependencies(&self) -> &[Box<dyn CommonTableExpression>] {
+        &self.inner
+    }
+}
+
+pub(crate) fn serialize(
+    cte: &dyn CommonTableExpression,
+) -> ::core::result::Result<String, std::fmt::Error> {
+    let mut ctes = BTreeSet::new();
+
+    #[derive(Eq, Ord)]
+    struct SerializedExpression {
+        name: String,
+        contents: String,
+    }
+
+    impl PartialEq for SerializedExpression {
+        fn eq(&self, other: &Self) -> bool {
+            self.name == other.name
+        }
+    }
+
+    impl PartialOrd for SerializedExpression {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            self.name.partial_cmp(&other.name)
+        }
+    }
+
+    fn serialize_into(
+        cte: &dyn CommonTableExpression,
+        ctes: &mut BTreeSet<SerializedExpression>,
+    ) -> Result {
+        let mut serialized = SerializedExpression {
+            name: String::new(),
+            contents: String::new(),
+        };
+
+        cte.table_name(&mut serialized.name)?;
+
+        if !ctes.contains(&serialized) {
+            for dependency in cte.dependencies() {
+                serialize_into(dependency.as_ref(), ctes)?;
+            }
+
+            write!(
+                serialized.contents,
+                "  __cte_{table_name} as (\n",
+                table_name = serialized.name
+            )
+            .unwrap();
+
+            cte.serialize(&mut serialized.contents)?;
+            serialized.contents.push_str("\n  )");
+            ctes.insert(serialized);
+        }
+        Ok(())
+    }
+
+    serialize_into(cte, &mut ctes)?;
+
+    let mut statement = String::from("with\n");
+    for (index, serialized_cte) in ctes.into_iter().enumerate() {
+        if index != 0 {
+            statement.push_str(",\n");
+        }
+        statement.push_str(&serialized_cte.contents);
+    }
+
+    statement.push_str("\nselect * from __cte_");
+    cte.table_name(&mut statement)?;
+    statement.push_str("\n");
+
+    Ok(statement)
+}
+
+pub trait Filter<DB: Database> {
+    fn cte(cte: Box<dyn CommonTableExpression>) -> Box<dyn CommonTableExpression>;
+}
+
+// This is for the empty unfiltered case.
+impl<DB: Database> Filter<DB> for () {
+    fn cte(cte: Box<dyn CommonTableExpression>) -> Box<dyn CommonTableExpression> {
+        cte
+    }
+}
+
+pub struct With<T>(PhantomData<T>);
+
+impl<T, DB: Database> Filter<DB> for With<T>
+where
+    T: Deserializeable<DB>,
+{
+    fn cte(cte: Box<dyn CommonTableExpression>) -> Box<dyn CommonTableExpression> {
+        Box::new(Include {
+            inner: [cte, <T as Deserializeable<DB>>::cte()],
+        })
+    }
+}
+pub struct Without<T>(PhantomData<T>);
+
+impl<T, DB: Database> Filter<DB> for Without<T>
+where
+    T: Deserializeable<DB>,
+{
+    fn cte(cte: Box<dyn CommonTableExpression>) -> Box<dyn CommonTableExpression> {
+        Box::new(Exclude {
+            inner: [cte, <T as Deserializeable<DB>>::cte()],
+        })
+    }
+}
+
+macro_rules! impl_filter_for_tuple{
+    ($($list:ident),*) => {
+        impl<DB, $($list),*> Filter<DB> for ($($list,)*)
+        where
+            DB: Database,
+            $($list: Filter<DB>,)*
+        {
+            fn cte(cte: Box<dyn CommonTableExpression>) -> Box<dyn CommonTableExpression> {
+                $(let cte = <$list as Filter<DB>>::cte(cte);)*
+                cte
+            }
+        }
+    }
+}
+
+impl_filter_for_tuple!(T1);
+impl_filter_for_tuple!(T1, T2);
+impl_filter_for_tuple!(T1, T2, T3);
+impl_filter_for_tuple!(T1, T2, T3, T4);
+impl_filter_for_tuple!(T1, T2, T3, T4, T5);
+impl_filter_for_tuple!(T1, T2, T3, T4, T5, T6);
+impl_filter_for_tuple!(T1, T2, T3, T4, T5, T6, T7);
+impl_filter_for_tuple!(T1, T2, T3, T4, T5, T6, T7, T8);
+
+#[test]
+fn test_build() {
+    let positions = Extract {
+        table: "positions",
+        columns: &["x", "y"],
+    };
+
+    let names = Extract {
+        table: "named",
+        columns: &["first", "last"],
+    };
+
+    let merge = Merge {
+        tables: vec![Box::new(positions), Box::new(names)],
+    };
+
+    let exclude = Exclude {
+        inner: [
+            Box::new(merge),
+            Box::new(Extract {
+                table: "address",
+                columns: &[],
+            }),
+        ],
+    };
+
+    let parents = Extract {
+        table: "parents",
+        columns: &[],
+    };
+
+    let include = Include {
+        inner: [Box::new(exclude), Box::new(parents)],
+    };
+
+    println!("{}", serialize(&include).unwrap());
 }

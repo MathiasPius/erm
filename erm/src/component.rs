@@ -24,7 +24,7 @@ impl<DB: Database> ColumnDefinition<DB> {
 
 /// Describes reading and writing from a Component-specific Table.
 pub trait Component<DB: Database>: Serializable<DB> + Deserializeable<DB> + Sized {
-    const OPTIONAL: bool = false;
+    const JOIN: &'static str = "inner";
     const INSERT: &'static str;
     const UPDATE: &'static str;
     const DELETE: &'static str;

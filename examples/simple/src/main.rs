@@ -32,6 +32,7 @@ async fn main() {
 
     // Let's name an Archetype instead of just relying on a tuple.
     #[derive(Archetype, Debug)]
+    #[allow(unused)]
     struct Person {
         name: Name,
         age: Age,
@@ -39,7 +40,8 @@ async fn main() {
 
     // List all the people we know
     let people = backend
-        .list_all::<Person>()
+        .list::<Person>()
+        .fetch()
         .try_collect::<Vec<_>>()
         .await
         .unwrap();
@@ -73,7 +75,8 @@ async fn main() {
     backend.remove::<Person>(&jimothy).await;
 
     let remaining_names = backend
-        .list_all::<Name>()
+        .list::<Name>()
+        .fetch()
         .try_collect::<Vec<_>>()
         .await
         .unwrap();

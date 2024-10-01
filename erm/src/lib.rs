@@ -64,7 +64,7 @@
 //!
 //! # use futures::stream::StreamExt as _;
 //! // Iterate over all components with a DisplayName
-//! let mut names = Box::pin(backend.list_all::<(DisplayName, Position)>());
+//! let mut names = Box::pin(backend.list::<(DisplayName, Position)>().fetch());
 //! while let Some(Ok((entity, (display_name, position)))) = names.next().await {
 //!     println!("name: {} at {},{}", display_name.name, position.x, position.y);
 //! }
@@ -107,6 +107,7 @@ pub mod prelude {
     pub use crate::backend::*;
     pub use crate::component::{ColumnDefinition, Component};
     pub use crate::condition;
+    pub use crate::cte::*;
     pub use crate::reflect::Reflect;
     pub use crate::serialization::{Deserializeable, Serializable};
     pub use crate::tables::Removeable;

@@ -22,7 +22,6 @@ impl Component {
         let statements = self.statements(placeholder_char);
         let table = self.table();
         let columns = self.columns(sqlx, database);
-        let archetype = self.archetype(database);
         let table_creator = self.table_creator(sqlx, database);
         let remove = self.remove(sqlx, database);
         let insert = self.insert(sqlx, database);
@@ -38,9 +37,7 @@ impl Component {
                 #table_creator
             }
 
-            impl ::erm::archetype::Archetype<#database> for #component_name {
-                #archetype
-            }
+            impl ::erm::archetype::Archetype<#database> for #component_name {}
 
             impl ::erm::serialization::Serializable<#database> for #component_name {
                 #serialize
@@ -95,21 +92,6 @@ impl Component {
             const INSERT: &'static str = #insert;
             const UPDATE: &'static str = #update;
             const DELETE: &'static str = #delete;
-        }
-    }
-
-    fn archetype(&self, database: &TokenStream) -> TokenStream {
-        quote! {
-            fn list_statement() -> impl ::erm::cte::CommonTableExpression {
-                ::erm::cte::Select {
-                    optional: false,
-                    table: <Self as ::erm::component::Component<#database>>::table().to_string(),
-                    columns: <Self as ::erm::component::Component<#database>>::columns()
-                        .into_iter()
-                        .map(|column| column.name().to_string())
-                        .collect(),
-                }
-            }
         }
     }
 
@@ -233,6 +215,21 @@ impl Component {
         let component_name = &self.typename;
         let deserialized_fields = self.fields.iter().map(Field::deserialize);
 
+        let columns = self.fields.iter().map(|field| match field {
+            Field::Numbered { ident, .. } => {
+                let ident = format!("column{}", ident.to_string());
+                quote! {
+                    #ident
+                }
+            }
+            Field::Named { ident, .. } => {
+                let ident = ident.to_string();
+                quote! {
+                    #ident
+                }
+            }
+        });
+
         let assignments = self.fields.iter().map(|field| match field {
             Field::Numbered { ident, .. } => {
                 let ident = Ident::new(&format!("self_{ident}"), ident.span());
@@ -262,7 +259,18 @@ impl Component {
             },
         };
 
+        let table_name = &self.table_name;
+
         quote! {
+            fn cte() -> Box<dyn ::erm::cte::CommonTableExpression> {
+                Box::new(::erm::cte::Extract {
+                    table: #table_name,
+                    columns: &[
+                        #(#columns,)*
+                    ],
+                })
+            }
+
             fn deserialize(row: &mut ::erm::row::OffsetRow<<#database as #sqlx::Database>::Row>) -> Result<Self, #sqlx::Error> {
                 #(#deserialized_fields;)*
 

@@ -90,25 +90,30 @@ async fn main() {
         .await;
 
     #[derive(Debug, Archetype)]
-    pub struct Person {
+    #[allow(unused)]
+    struct Person {
         name: FriendlyName,
         parent: Parent,
     }
 
-    let children: Vec<_> =
-        Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq("Bob".to_string())))
-            .collect()
-            .await;
+    let children: Vec<_> = backend
+        .list::<Person>()
+        .and(Parent::FIELDS.parent.eq("Bob".to_string()))
+        .fetch()
+        .collect()
+        .await;
 
     assert_eq!(children.len(), 1);
     println!("{children:#?}");
 
     backend.remove::<Person>(&charlie).await;
 
-    let children: Vec<_> =
-        Box::pin(backend.list::<Person, _>(Parent::FIELDS.parent.eq("Bob".to_string())))
-            .collect()
-            .await;
+    let children: Vec<_> = backend
+        .list::<Person>()
+        .and(Parent::FIELDS.parent.eq("Bob".to_string()))
+        .fetch()
+        .collect()
+        .await;
 
     assert!(children.is_empty());
 }

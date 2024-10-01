@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use sqlx::{query::QueryAs, Database};
 
 use crate::archetype::DatabasePlaceholder;
@@ -6,7 +8,7 @@ pub trait Condition<'q, DB>: Sized
 where
     DB: Database,
 {
-    fn serialize(&self) -> String;
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result;
     fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
@@ -24,10 +26,6 @@ where
 pub struct All;
 
 impl<'q, DB: Database> Condition<'q, DB> for All {
-    fn serialize(&self) -> String {
-        "1 == 1".to_string()
-    }
-
     fn bind<T>(
         self,
         query: QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
@@ -36,6 +34,10 @@ impl<'q, DB: Database> Condition<'q, DB> for All {
         DB: Database,
     {
         query
+    }
+
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(f, "1 = 1")
     }
 }
 
@@ -57,8 +59,9 @@ impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for Eq
 where
     Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
 {
-    fn serialize(&self) -> String {
-        format!(
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
             "{} == {}",
             self.column,
             <DB as DatabasePlaceholder>::PLACEHOLDER
@@ -94,8 +97,9 @@ impl<'q, DB: Database + DatabasePlaceholder, Parameter> Condition<'q, DB> for In
 where
     Parameter: sqlx::Type<DB> + sqlx::Encode<'q, DB> + 'q,
 {
-    fn serialize(&self) -> String {
-        format!(
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(
+            f,
             "{} <> {}",
             self.column,
             <DB as DatabasePlaceholder>::PLACEHOLDER
@@ -125,8 +129,12 @@ impl<A, B> And<A, B> {
 }
 
 impl<'q, DB: Database, A: Condition<'q, DB>, B: Condition<'q, DB>> Condition<'q, DB> for And<A, B> {
-    fn serialize(&self) -> String {
-        format!("({} and {})", self.a.serialize(), self.b.serialize())
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(f, "(")?;
+        self.a.serialize(f)?;
+        write!(f, " and ")?;
+        self.b.serialize(f)?;
+        write!(f, ")")
     }
 
     fn bind<T>(
@@ -154,8 +162,12 @@ impl<A, B> Or<A, B> {
 }
 
 impl<'q, DB: Database, A: Condition<'q, DB>, B: Condition<'q, DB>> Condition<'q, DB> for Or<A, B> {
-    fn serialize(&self) -> String {
-        format!("({} or {})", self.a.serialize(), self.b.serialize())
+    fn serialize(&self, f: &mut dyn Write) -> std::fmt::Result {
+        write!(f, "(")?;
+        self.a.serialize(f)?;
+        write!(f, " or ")?;
+        self.b.serialize(f)?;
+        write!(f, ")")
     }
 
     fn bind<T>(

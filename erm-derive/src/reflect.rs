@@ -13,16 +13,19 @@ pub fn reflect_component(component_name: &Ident, fields: &Vec<Field>) -> TokenSt
         let stringified = name.to_string();
 
         quote! {
+            #[allow(unused)]
             #name: ::erm::reflect::ReflectedColumn::new(#stringified)
         }
     });
 
     quote! {
+        #[allow(unused)]
         pub struct #reflection_name {
             #(#declarations),*
         }
 
         impl #reflection_name {
+            #[allow(unused)]
             pub const fn new() -> Self {
                 Self {
                     #(#constructors,)*

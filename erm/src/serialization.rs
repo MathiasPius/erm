@@ -1,8 +1,9 @@
 use sqlx::{query::Query, ColumnIndex, Database};
 
-use crate::{entity::EntityPrefixedQuery, row::OffsetRow, tables::Removeable};
+use crate::{cte::*, entity::EntityPrefixedQuery, row::OffsetRow, tables::Removeable};
 
 pub trait Deserializeable<DB: Database>: Sized {
+    fn cte() -> Box<dyn CommonTableExpression>;
     fn deserialize(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error>;
 }
 
@@ -25,6 +26,12 @@ impl<T: Deserializeable<DB>, DB: Database> Deserializeable<DB> for Option<T>
 where
     usize: ColumnIndex<<DB as Database>::Row>,
 {
+    fn cte() -> Box<dyn CommonTableExpression> {
+        Box::new(Optional {
+            inner: <T as Deserializeable<DB>>::cte(),
+        })
+    }
+
     fn deserialize(row: &mut OffsetRow<<DB as Database>::Row>) -> Result<Self, sqlx::Error> {
         if row.is_null() {
             row.skip(1);
@@ -51,6 +58,14 @@ macro_rules! impl_deser_for_db{
         where
             $($list: Deserializeable<$db>,)*
         {
+            fn cte() -> Box<dyn CommonTableExpression> {
+                Box::new(Merge {
+                    tables: vec![
+                        $(<$list as Deserializeable<$db>>::cte(),)*
+                    ],
+                })
+            }
+
             fn deserialize(
                 row: &mut OffsetRow<<$db as Database>::Row>,
             ) -> Result<Self, sqlx::Error> {

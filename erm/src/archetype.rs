@@ -1,14 +1,9 @@
 use std::future::Future;
 
-use async_stream::stream;
-use futures::Stream;
 use sqlx::{ColumnIndex, Database, Executor, IntoArguments, Pool};
 
 use crate::{
-    condition::Condition,
-    cte::{CommonTableExpression, Filter, Select},
     entity::EntityPrefixedQuery,
-    row::Rowed,
     serialization::{Deserializeable, Serializable},
     tables::Removeable,
 };
@@ -29,67 +24,6 @@ impl DatabasePlaceholder for sqlx::Postgres {
 }
 
 pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
-    fn list_statement() -> impl CommonTableExpression;
-
-    fn get_statement() -> impl CommonTableExpression {
-        Filter {
-            inner: Box::new(Self::list_statement()),
-            clause: "entity".to_string(),
-        }
-    }
-
-    fn list<Entity, Cond>(
-        pool: &Pool<DB>,
-        condition: Cond,
-    ) -> impl Stream<Item = Result<(Entity, Self), sqlx::Error>>
-    where
-        Self: Unpin + Send,
-        Cond: for<'c> Condition<'c, DB>,
-        for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
-        for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
-        for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
-        DB: DatabasePlaceholder,
-        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
-    {
-        stream! {
-            let sql = format!(
-                "{} where {}",
-                <Self as Archetype<DB>>::list_statement().serialize(<DB as DatabasePlaceholder>::PLACEHOLDER),
-                condition.serialize()
-            );
-
-            println!("{sql}");
-
-            let query = condition.bind(sqlx::query_as::<DB, Rowed<Entity, Self>>(&sql));
-
-            for await row in query.fetch(pool) {
-                yield row.map(|rowed| (rowed.entity, rowed.inner))
-            }
-        }
-    }
-
-    fn get<Entity>(
-        pool: &Pool<DB>,
-        entity: &Entity,
-    ) -> impl Future<Output = Result<Self, sqlx::Error>>
-    where
-        Self: Unpin + Send,
-        for<'c> <DB as sqlx::Database>::Arguments<'c>: IntoArguments<'c, DB> + Send,
-        for<'e> Entity: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
-        for<'c> &'c mut <DB as sqlx::Database>::Connection: Executor<'c, Database = DB>,
-        DB: DatabasePlaceholder,
-        usize: ColumnIndex<<DB as sqlx::Database>::Row>,
-    {
-        async move {
-            let sql = <Self as Archetype<DB>>::get_statement()
-                .serialize(<DB as DatabasePlaceholder>::PLACEHOLDER);
-            let result: Rowed<Entity, Self> =
-                sqlx::query_as(&sql).bind(entity).fetch_one(pool).await?;
-
-            Ok(result.inner)
-        }
-    }
-
     fn insert<'query, Entity>(
         &'query self,
         pool: &'query Pool<DB>,
@@ -176,38 +110,6 @@ where
     T: Archetype<DB>,
     usize: ColumnIndex<<DB as Database>::Row>,
 {
-    fn list_statement() -> impl CommonTableExpression {
-        let inner = <T as Archetype<DB>>::list_statement();
-
-        Select {
-            optional: true,
-            table: inner.primary_table(),
-            columns: inner
-                .columns()
-                .into_iter()
-                .map(|(_, column)| column)
-                .collect(),
-        }
-    }
-}
-
-#[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
-macro_rules! expand_inner_join {
-    ($db:ty, $first:ident, $second:ident) => {
-        crate::cte::Join {
-            left:
-                Box::new(<$first as Archetype<$db>>::list_statement()),
-            right:
-                Box::new(<$second as Archetype<$db>>::list_statement()),
-        }
-    };
-
-    ($db:ty, $first:ident, $($list:ident),*) => {
-        crate::cte::Join {
-            left: Box::new(<$first as Archetype<$db>>::list_statement()),
-            right: Box::new(<($($list),*) as Archetype<$db>>::list_statement()),
-        }
-    };
 }
 
 #[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
@@ -217,9 +119,7 @@ macro_rules! impl_compound_for_db{
         where
             $($list: Archetype<$db>,)*
         {
-            fn list_statement() -> impl CommonTableExpression {
-                expand_inner_join!($db, $($list),*)
-            }
+
         }
     };
 }

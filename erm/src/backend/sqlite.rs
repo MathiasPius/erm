@@ -1,15 +1,15 @@
 use std::{future::Future, marker::PhantomData};
 
-use futures::Stream;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteQueryResult};
 use sqlx::{Pool, Sqlite};
 
 use crate::archetype::Archetype;
-use crate::condition::Condition;
-use crate::prelude::{Component, Serializable};
+use crate::condition::All;
+use crate::prelude::{Component, Deserializeable, Serializable};
+use crate::row::Rowed;
 use crate::tables::Removeable;
 
-use super::Backend;
+use super::{Backend, List};
 
 pub struct SqliteBackend<Entity> {
     pool: Pool<Sqlite>,
@@ -57,19 +57,29 @@ where
         <T as Component<Sqlite>>::create_component_table::<Entity>(&self.pool)
     }
 
-    fn list<T, Cond>(&self, condition: Cond) -> impl Stream<Item = Result<(Entity, T), sqlx::Error>>
-    where
-        T: Archetype<Sqlite> + Unpin + Send + 'static,
-        Cond: for<'c> Condition<'c, Sqlite>,
-    {
-        <T as Archetype<Sqlite>>::list(&self.pool, condition)
+    fn list<T>(&self) -> List<Sqlite, Entity, T, (), All> {
+        List {
+            pool: self.pool.clone(),
+            _data: PhantomData,
+            condition: All,
+        }
     }
 
     fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
     where
-        T: Archetype<Sqlite> + Unpin + Send + 'static,
+        T: Deserializeable<Sqlite> + Unpin + Send + 'static,
     {
-        <T as Archetype<Sqlite>>::get(&self.pool, entity)
+        async move {
+            let sql =
+                crate::cte::serialize(<T as Deserializeable<Sqlite>>::cte().as_ref()).unwrap();
+
+            let result: Rowed<Entity, T> = sqlx::query_as(&sql)
+                .bind(entity)
+                .fetch_one(&self.pool)
+                .await?;
+
+            Ok(result.inner)
+        }
     }
 
     fn insert<'a, 'b, 'c, T>(
