@@ -1,6 +1,6 @@
 use sqlx::{query::Query, ColumnIndex, Database};
 
-use crate::{cte::*, entity::EntityPrefixedQuery, row::OffsetRow, tables::Removeable};
+use crate::{cte::*, entity::EntityPrefixedQuery, row::OffsetRow, tables::Removable};
 
 pub trait Deserializeable<DB: Database>: Sized {
     fn cte() -> Box<dyn CommonTableExpression>;
@@ -42,12 +42,12 @@ where
     }
 }
 
-impl<T: Removeable<DB>, DB: Database> Removeable<DB> for Option<T> {
+impl<T: Removable<DB>, DB: Database> Removable<DB> for Option<T> {
     fn remove<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
     where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
-        <T as Removeable<DB>>::remove(query);
+        <T as Removable<DB>>::remove(query);
     }
 }
 

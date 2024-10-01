@@ -13,7 +13,7 @@ use crate::{
     cte::{Filter, With, Without},
     prelude::{Component, Deserializeable, Serializable},
     row::Rowed,
-    tables::Removeable,
+    tables::Removable,
 };
 
 #[cfg(feature = "sqlite")]
@@ -89,7 +89,7 @@ where
 
     fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<DB> + Removeable<DB> + Unpin + Send + 'static;
+        T: Archetype<DB> + Removable<DB> + Unpin + Send + 'static;
 
     fn list<T>(&self) -> List<DB, Entity, T, (), All>;
 

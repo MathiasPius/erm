@@ -49,16 +49,10 @@ impl Component {
                 #deserialize
             }
 
-            impl ::erm::tables::Removeable<#database> for #component_name {
+            impl ::erm::tables::Removable<#database> for #component_name {
                 #remove
             }
         }
-    }
-
-    pub fn is_tuple(&self) -> bool {
-        self.fields
-            .iter()
-            .all(|field| matches!(field, Field::Numbered { .. }))
     }
 
     fn statements(&self, placeholder_char: char) -> TokenStream {
@@ -165,7 +159,7 @@ impl Component {
             where
                 Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query,
             {
-                query.query(Self::DELETE, |query| query)
+                query.query(<Self as Component<#database>>::DELETE, |query| query)
             }
         }
     }
@@ -176,7 +170,7 @@ impl Component {
             where
                 Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
             {
-                query.query(Self::INSERT, move |query| {
+                query.query(<Self as Component<#database>>::INSERT, move |query| {
                     <Self as Serializable<#database>>::serialize(self, query)
                 })
             }
@@ -189,7 +183,7 @@ impl Component {
             where
                 Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
             {
-                query.query(Self::UPDATE, move |query| {
+                query.query(<Self as Component<#database>>::UPDATE, move |query| {
                     <Self as Serializable<#database>>::serialize(self, query)
                 })
             }

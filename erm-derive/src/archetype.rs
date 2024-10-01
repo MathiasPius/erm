@@ -26,7 +26,7 @@ impl Archetype {
                 #deserializer
             }
 
-            impl ::erm::tables::Removeable<#database> for #archetype_name {
+            impl ::erm::tables::Removable<#database> for #archetype_name {
                 #remove
             }
         }
@@ -37,7 +37,7 @@ impl Archetype {
             let typename = field.typename();
 
             quote! {
-                <#typename as ::erm::tables::Removeable<#database>>::remove(query);
+                <#typename as ::erm::tables::Removable<#database>>::remove(query);
             }
         });
 

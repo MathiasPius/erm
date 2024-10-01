@@ -5,7 +5,7 @@ use sqlx::{ColumnIndex, Database, Executor, IntoArguments, Pool};
 use crate::{
     entity::EntityPrefixedQuery,
     serialization::{Deserializeable, Serializable},
-    tables::Removeable,
+    tables::Removable,
 };
 
 pub trait DatabasePlaceholder {
@@ -83,7 +83,7 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
         entity: Entity,
     ) -> impl Future<Output = ()> + Send + 'query
     where
-        Self: Removeable<DB> + Send,
+        Self: Removable<DB> + Send,
         for<'connection> <DB as sqlx::Database>::Arguments<'connection>:
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
@@ -92,7 +92,7 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
     {
         let mut removes = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
 
-        <Self as Removeable<DB>>::remove(&mut removes);
+        <Self as Removable<DB>>::remove(&mut removes);
 
         async move {
             let mut tx = pool.begin().await.unwrap();

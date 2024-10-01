@@ -2,7 +2,7 @@ use sqlx::Database;
 
 use crate::entity::EntityPrefixedQuery;
 
-pub trait Removeable<DB: Database>: Sized {
+pub trait Removable<DB: Database>: Sized {
     fn remove<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
     where
         Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
@@ -11,9 +11,9 @@ pub trait Removeable<DB: Database>: Sized {
 #[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 macro_rules! impl_remove_for_db{
     ($db:ty, $($list:ident:$index:tt),*) => {
-        impl<$($list),*> Removeable<$db> for ($($list,)*)
+        impl<$($list),*> Removable<$db> for ($($list,)*)
         where
-            $($list: Removeable<$db>,)*
+            $($list: Removable<$db>,)*
         {
             fn remove<'query, Entity>(
                 query: &mut EntityPrefixedQuery<'query, $db, Entity>,
@@ -23,7 +23,7 @@ macro_rules! impl_remove_for_db{
                 $(
                     {
                         #[allow(unused)]
-                        <$list as Removeable<$db>>::remove(query);
+                        <$list as Removable<$db>>::remove(query);
                     }
                 )*
             }

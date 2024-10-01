@@ -5,7 +5,7 @@ use futures::TryStreamExt as _;
 pub struct Name(String);
 
 #[derive(Component, Debug, PartialEq)]
-pub struct Age(u32);
+pub struct Age(i64);
 
 #[tokio::main]
 async fn main() {

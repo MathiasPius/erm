@@ -7,7 +7,7 @@ use crate::archetype::Archetype;
 use crate::condition::All;
 use crate::prelude::{Component, Deserializeable, Serializable};
 use crate::row::Rowed;
-use crate::tables::Removeable;
+use crate::tables::Removable;
 
 use super::{Backend, List};
 
@@ -108,7 +108,7 @@ where
 
     fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
     where
-        T: Archetype<Sqlite> + Removeable<Sqlite> + Unpin + Send + 'static,
+        T: Archetype<Sqlite> + Removable<Sqlite> + Unpin + Send + 'static,
     {
         <T as Archetype<Sqlite>>::remove(&self.pool, entity)
     }

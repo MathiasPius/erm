@@ -110,5 +110,5 @@ pub mod prelude {
     pub use crate::cte::*;
     pub use crate::reflect::Reflect;
     pub use crate::serialization::{Deserializeable, Serializable};
-    pub use crate::tables::Removeable;
+    pub use crate::tables::Removable;
 }
