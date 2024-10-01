@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["erm", "erm-derive", "erm-example", "examples/*"]
+members = ["erm", "erm-derive", "examples/*"]
 
 [workspace.dependencies]
 erm = { path = "erm" }
