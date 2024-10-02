@@ -11,12 +11,12 @@ use crate::tables::Removable;
 
 use super::{Backend, List};
 
-pub struct PostgresBackend<Entity> {
+pub struct PostgresBackend<EntityId> {
     pool: Pool<Postgres>,
-    _entity: PhantomData<Entity>,
+    _entity: PhantomData<EntityId>,
 }
 
-impl<Entity> PostgresBackend<Entity> {
+impl<EntityId> PostgresBackend<EntityId> {
     pub fn new(pool: Pool<Postgres>) -> Self {
         PostgresBackend {
             pool,
@@ -25,24 +25,24 @@ impl<Entity> PostgresBackend<Entity> {
     }
 }
 
-impl<Entity> Backend<Postgres, Entity> for PostgresBackend<Entity>
+impl<EntityId> Backend<Postgres, EntityId> for PostgresBackend<EntityId>
 where
-    Entity: for<'q> sqlx::Encode<'q, Postgres>
+    EntityId: for<'q> sqlx::Encode<'q, Postgres>
         + for<'r> sqlx::Decode<'r, Postgres>
         + sqlx::Type<Postgres>
         + Unpin
         + Send
         + 'static,
-    for<'entity> &'entity Entity: Send,
+    for<'entity> &'entity EntityId: Send,
 {
     fn register<T>(&self) -> impl Future<Output = Result<PgQueryResult, sqlx::Error>>
     where
         T: Component<Postgres>,
     {
-        <T as Component<Postgres>>::create_component_table::<Entity>(&self.pool)
+        <T as Component<Postgres>>::create_component_table::<EntityId>(&self.pool)
     }
 
-    fn list<T>(&self) -> List<Postgres, Entity, T, (), All> {
+    fn list<T>(&self) -> List<Postgres, EntityId, T, (), All> {
         List {
             pool: self.pool.clone(),
             _data: PhantomData,
@@ -50,7 +50,7 @@ where
         }
     }
 
-    fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
+    fn get<T>(&self, entity: &EntityId) -> impl Future<Output = Result<T, sqlx::Error>>
     where
         T: Deserializeable<Postgres> + Unpin + Send + 'static,
     {
@@ -58,7 +58,7 @@ where
             let sql =
                 crate::cte::serialize(<T as Deserializeable<Postgres>>::cte().as_ref()).unwrap();
 
-            let result: Rowed<Entity, T> = sqlx::query_as(&sql)
+            let result: Rowed<EntityId, T> = sqlx::query_as(&sql)
                 .bind(entity)
                 .fetch_one(&self.pool)
                 .await?;
@@ -69,7 +69,7 @@ where
 
     fn insert<'a, 'b, 'c, T>(
         &'a self,
-        entity: &'b Entity,
+        entity: &'b EntityId,
         components: &'c T,
     ) -> impl Future<Output = ()> + Send + 'c
     where
@@ -82,7 +82,7 @@ where
 
     fn update<'a, T>(
         &'a self,
-        entity: &'a Entity,
+        entity: &'a EntityId,
         components: &'a T,
     ) -> impl Future<Output = ()> + 'a
     where
@@ -91,7 +91,7 @@ where
         <T as Archetype<Postgres>>::update(&components, &self.pool, entity)
     }
 
-    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a EntityId) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<Postgres> + Removable<Postgres> + Unpin + Send + 'static,
     {

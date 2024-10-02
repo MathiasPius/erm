@@ -60,27 +60,26 @@ async fn main() {
     let shipped_items = backend
         .list::<OrderId>()
         .with::<ShippedTo>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
         .unwrap();
 
     println!("{shipped_items:#?}");
-    //  [
-    //     (
-    //         3,
-    //         OrderId(
-    //             "#10000020",
-    //         ),
+    // [
+    //     OrderId(
+    //         "#10000020",
     //     ),
     // ]
 
-    assert_eq!(shipped_items, vec![(3, OrderId("#10000020".to_string()))]);
+    assert_eq!(shipped_items[0], OrderId("#10000020".to_string()));
 
     // List all items which have not yet been paid for.
     let unpaid_items = backend
         .list::<OrderId>()
         .without::<Payment>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -88,13 +87,10 @@ async fn main() {
 
     println!("{unpaid_items:#?}");
     // [
-    //     (
-    //         1,
-    //         OrderId(
-    //             "#1234",
-    //         ),
+    //      OrderId(
+    //          "#1234",
     //     ),
     // ]
 
-    assert_eq!(unpaid_items, vec![(1, OrderId("#1234".to_string()))]);
+    assert_eq!(unpaid_items[0], OrderId("#1234".to_string()));
 }

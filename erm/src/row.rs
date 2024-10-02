@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row, ValueRef};
 
 use crate::serialization::Deserializeable;
@@ -40,25 +42,64 @@ impl<'r, R: Row> OffsetRow<'r, R> {
 
 /// FromRow-implementing wrapper around Components
 #[derive(Debug)]
-pub struct Rowed<Entity, T> {
-    pub entity: Entity,
-    pub inner: T,
+
+pub struct Entity<EntityId, T> {
+    id: EntityId,
+    inner: T,
 }
 
-impl<'r, R, Entity, T> FromRow<'r, R> for Rowed<Entity, T>
+impl<EntityId, T> Entity<EntityId, T> {
+    pub fn id(&self) -> &EntityId {
+        &self.id
+    }
+
+    pub fn into_id(self) -> EntityId {
+        self.id
+    }
+
+    pub fn components(&self) -> &T {
+        &self.inner
+    }
+
+    pub fn into_components(self) -> T {
+        self.inner
+    }
+}
+
+impl<EntityId, T> AsRef<T> for Entity<EntityId, T> {
+    fn as_ref(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<EntityId, T> Deref for Entity<EntityId, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<EntityId, T> DerefMut for Entity<EntityId, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'r, R, EntityId, T> FromRow<'r, R> for Entity<EntityId, T>
 where
     R: Row,
-    Entity: for<'e> sqlx::Decode<'e, <R as sqlx::Row>::Database>
+    EntityId: for<'e> sqlx::Decode<'e, <R as sqlx::Row>::Database>
         + sqlx::Type<<R as sqlx::Row>::Database>,
     T: Deserializeable<<R as Row>::Database>,
     usize: ColumnIndex<R>,
 {
     fn from_row(row: &'r R) -> Result<Self, sqlx::Error> {
         let mut row = OffsetRow::new(row);
-        let entity = row.try_get::<Entity>()?;
+        let id = row.try_get::<EntityId>()?;
 
-        Ok(Rowed {
-            entity,
+        Ok(Entity {
+            id,
             inner: <T as Deserializeable<<R as Row>::Database>>::deserialize(&mut row)?,
         })
     }

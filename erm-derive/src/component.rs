@@ -114,11 +114,11 @@ impl Component {
             .map(|field| field.sql_definition(sqlx, database));
 
         quote! {
-            fn create_component_table<'pool, Entity>(
+            fn create_component_table<'pool, EntityId>(
                 pool: &'pool #sqlx::Pool<#database>,
             ) -> impl ::core::future::Future<Output = Result<<#database as #sqlx::Database>::QueryResult, #sqlx::Error>> + Send
             where
-                Entity: #sqlx::Type<#database>,
+                EntityId: #sqlx::Type<#database>,
             {
                 async move {
                     use sqlx::TypeInfo as _;
@@ -126,7 +126,7 @@ impl Component {
 
                     let sql = format!(
                         #format_str,
-                        <Entity as #sqlx::Type<#database>>::type_info().name(),
+                        <EntityId as #sqlx::Type<#database>>::type_info().name(),
                         #(#definitions,)*
                     );
 
@@ -160,9 +160,9 @@ impl Component {
 
     fn remove(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         quote! {
-            fn remove<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn remove<'query, EntityId>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, EntityId>)
             where
-                Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query,
+                EntityId: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query,
             {
                 query.query(<Self as Component<#database>>::DELETE, |query| query)
             }
@@ -171,9 +171,9 @@ impl Component {
 
     fn insert(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
         quote! {
-            fn insert<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn insert<'query, EntityId>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, EntityId>)
             where
-                Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
+                EntityId: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
             {
                 query.query(<Self as Component<#database>>::INSERT, move |query| {
                     <Self as Serializable<#database>>::serialize(self, query)
@@ -184,9 +184,9 @@ impl Component {
 
     fn update(&self, database: &TokenStream) -> TokenStream {
         quote! {
-            fn update<'query, Entity>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn update<'query, EntityId>(&'query self, query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, EntityId>)
             where
-                Entity: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
+                EntityId: sqlx::Encode<'query, #database> + sqlx::Type<#database> + Clone + 'query
             {
                 query.query(<Self as Component<#database>>::UPDATE, move |query| {
                     <Self as Serializable<#database>>::serialize(self, query)

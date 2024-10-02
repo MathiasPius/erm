@@ -24,10 +24,10 @@ impl DatabasePlaceholder for sqlx::Postgres {
 }
 
 pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
-    fn insert<'query, Entity>(
+    fn insert<'query, EntityId>(
         &'query self,
         pool: &'query Pool<DB>,
-        entity: Entity,
+        entity: EntityId,
     ) -> impl Future<Output = ()> + Send + 'query
     where
         Self: Serializable<DB> + Send,
@@ -35,9 +35,9 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
     {
-        let mut inserts = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
+        let mut inserts = EntityPrefixedQuery::<'_, DB, EntityId>::new(entity);
 
         <Self as Serializable<DB>>::insert(&self, &mut inserts);
 
@@ -51,10 +51,10 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
         }
     }
 
-    fn update<'query, Entity>(
+    fn update<'query, EntityId>(
         &'query self,
         pool: &'query Pool<DB>,
-        entity: Entity,
+        entity: EntityId,
     ) -> impl Future<Output = ()> + Send + 'query
     where
         Self: Serializable<DB> + Send,
@@ -62,9 +62,9 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
     {
-        let mut inserts = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
+        let mut inserts = EntityPrefixedQuery::<'_, DB, EntityId>::new(entity);
 
         <Self as Serializable<DB>>::update(&self, &mut inserts);
 
@@ -78,9 +78,9 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
         }
     }
 
-    fn remove<'query, Entity>(
+    fn remove<'query, EntityId>(
         pool: &'query Pool<DB>,
-        entity: Entity,
+        entity: EntityId,
     ) -> impl Future<Output = ()> + Send + 'query
     where
         Self: Removable<DB> + Send,
@@ -88,9 +88,9 @@ pub trait Archetype<DB: Database>: Deserializeable<DB> + Sized {
             IntoArguments<'connection, DB> + Send,
         for<'connection> &'connection mut <DB as sqlx::Database>::Connection:
             Executor<'connection, Database = DB>,
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + Send + 'query,
     {
-        let mut removes = EntityPrefixedQuery::<'_, DB, Entity>::new(entity);
+        let mut removes = EntityPrefixedQuery::<'_, DB, EntityId>::new(entity);
 
         <Self as Removable<DB>>::remove(&mut removes);
 

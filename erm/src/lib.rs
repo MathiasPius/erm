@@ -1,6 +1,6 @@
-//! # Entity Relational Mapping
+//! # EntityId Relational Mapping
 //!
-//! Enables persistence for your Entity-Component architectures using [sqlx]
+//! Enables persistence for your EntityId-Component architectures using [sqlx]
 //!
 //! ## Quick Example
 //!
@@ -24,7 +24,7 @@
 //!    .unwrap();
 //!
 //! // Hand the pool over to our SqliteBackend, specifying
-//! // that we will be using Uuids as our Entity type.
+//! // that we will be using Uuids as our EntityId type.
 //! let backend = SqliteBackend::<uuid::Uuid>::new(db);
 //!
 //! // Define our components

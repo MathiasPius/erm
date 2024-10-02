@@ -6,17 +6,17 @@ use sqlx::{Pool, Sqlite};
 use crate::archetype::Archetype;
 use crate::condition::All;
 use crate::prelude::{Component, Deserializeable, Serializable};
-use crate::row::Rowed;
+use crate::row::Entity;
 use crate::tables::Removable;
 
 use super::{Backend, List};
 
-pub struct SqliteBackend<Entity> {
+pub struct SqliteBackend<EntityId> {
     pool: Pool<Sqlite>,
-    _entity: PhantomData<Entity>,
+    _entity: PhantomData<EntityId>,
 }
 
-impl<Entity> SqliteBackend<Entity> {
+impl<EntityId> SqliteBackend<EntityId> {
     pub fn new(pool: Pool<Sqlite>) -> Self {
         SqliteBackend {
             pool,
@@ -40,32 +40,36 @@ impl<Entity> SqliteBackend<Entity> {
     }
 }
 
-impl<Entity> Backend<Sqlite, Entity> for SqliteBackend<Entity>
+impl<EntityId> Backend<Sqlite, EntityId> for SqliteBackend<EntityId>
 where
-    Entity: for<'q> sqlx::Encode<'q, Sqlite>
+    EntityId: for<'q> sqlx::Encode<'q, Sqlite>
         + for<'r> sqlx::Decode<'r, Sqlite>
         + sqlx::Type<Sqlite>
         + Unpin
         + Send
         + 'static,
-    for<'entity> &'entity Entity: Send,
+    for<'entity> &'entity EntityId: Send,
 {
     fn register<T>(&self) -> impl Future<Output = Result<SqliteQueryResult, sqlx::Error>>
     where
         T: Component<Sqlite>,
     {
-        <T as Component<Sqlite>>::create_component_table::<Entity>(&self.pool)
+        <T as Component<Sqlite>>::create_component_table::<EntityId>(&self.pool)
     }
 
-    fn list<T>(&self) -> List<Sqlite, Entity, T, (), All> {
+    fn list<T>(&self) -> List<Sqlite, EntityId, T, (), All> {
+        fn identity<EntityId, T>(entity: Entity<EntityId, T>) -> Entity<EntityId, T> {
+            entity
+        }
         List {
             pool: self.pool.clone(),
             _data: PhantomData,
             condition: All,
+            map: identity::<EntityId, T>,
         }
     }
 
-    fn get<T>(&self, entity: &Entity) -> impl Future<Output = Result<T, sqlx::Error>>
+    fn get<T>(&self, entity: &EntityId) -> impl Future<Output = Result<T, sqlx::Error>>
     where
         T: Deserializeable<Sqlite> + Unpin + Send + 'static,
     {
@@ -73,18 +77,18 @@ where
             let sql =
                 crate::cte::serialize(<T as Deserializeable<Sqlite>>::cte().as_ref()).unwrap();
 
-            let result: Rowed<Entity, T> = sqlx::query_as(&sql)
+            let result: Entity<EntityId, T> = sqlx::query_as(&sql)
                 .bind(entity)
                 .fetch_one(&self.pool)
                 .await?;
 
-            Ok(result.inner)
+            Ok(result.into_components())
         }
     }
 
     fn insert<'a, 'b, 'c, T>(
         &'a self,
-        entity: &'b Entity,
+        entity: &'b EntityId,
         components: &'c T,
     ) -> impl Future<Output = ()> + Send + 'c
     where
@@ -97,7 +101,7 @@ where
 
     fn update<'a, T>(
         &'a self,
-        entity: &'a Entity,
+        entity: &'a EntityId,
         components: &'a T,
     ) -> impl Future<Output = ()> + 'a
     where
@@ -106,7 +110,7 @@ where
         <T as Archetype<Sqlite>>::update(&components, &self.pool, entity)
     }
 
-    fn remove<'a, T>(&'a self, entity: &'a Entity) -> impl Future<Output = ()> + 'a
+    fn remove<'a, T>(&'a self, entity: &'a EntityId) -> impl Future<Output = ()> + 'a
     where
         T: Archetype<Sqlite> + Removable<Sqlite> + Unpin + Send + 'static,
     {

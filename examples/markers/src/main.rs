@@ -49,6 +49,7 @@ async fn main() {
     let legged_things = backend
         .list::<Name>()
         .with::<Legs>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -56,23 +57,14 @@ async fn main() {
 
     println!("{legged_things:#?}");
     // [
-    //     (
-    //         1,
-    //         Name(
-    //             "Elephant",
-    //         ),
+    //     Name(
+    //         "Elephant",
     //     ),
-    //     (
-    //         3,
-    //         Name(
-    //             "Stool",
-    //         ),
+    //     Name(
+    //         "Stool",
     //     ),
-    //     (
-    //         4,
-    //         Name(
-    //             "Table",
-    //         ),
+    //     Name(
+    //         "Table",
     //     ),
     // ]
 
@@ -80,6 +72,7 @@ async fn main() {
         .list::<Name>()
         .with::<Animal>()
         .without::<Legs>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -87,11 +80,8 @@ async fn main() {
 
     println!("{legless_animals:#?}");
     // [
-    //     (
-    //         2,
-    //         Name(
-    //             "Snake",
-    //         ),
+    //     Name(
+    //         "Snake",
     //     ),
     // ]
 }

@@ -13,13 +13,17 @@ pub trait Serializable<DB: Database>: Sized {
         query: Query<'query, DB, <DB as Database>::Arguments<'query>>,
     ) -> Query<'query, DB, <DB as Database>::Arguments<'query>>;
 
-    fn insert<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
+    fn insert<'query, EntityId>(
+        &'query self,
+        query: &mut EntityPrefixedQuery<'query, DB, EntityId>,
+    ) where
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 
-    fn update<'query, Entity>(&'query self, query: &mut EntityPrefixedQuery<'query, DB, Entity>)
-    where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
+    fn update<'query, EntityId>(
+        &'query self,
+        query: &mut EntityPrefixedQuery<'query, DB, EntityId>,
+    ) where
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query;
 }
 
 impl<T: Deserializeable<DB>, DB: Database> Deserializeable<DB> for Option<T>
@@ -43,9 +47,9 @@ where
 }
 
 impl<T: Removable<DB>, DB: Database> Removable<DB> for Option<T> {
-    fn remove<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    fn remove<'query, EntityId>(query: &mut EntityPrefixedQuery<'query, DB, EntityId>)
     where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         <T as Removable<DB>>::remove(query);
     }
@@ -94,12 +98,12 @@ macro_rules! impl_deser_for_db{
                 query
             }
 
-            fn insert<'query, Entity>(
+            fn insert<'query, EntityId>(
                 &'query self,
-                query: &mut EntityPrefixedQuery<'query, $db, Entity>
+                query: &mut EntityPrefixedQuery<'query, $db, EntityId>
             )
             where
-                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query
+                EntityId: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query
             {
                 $(
                     #[allow(unused)]
@@ -108,12 +112,12 @@ macro_rules! impl_deser_for_db{
                 )*
             }
 
-            fn update<'query, Entity>(
+            fn update<'query, EntityId>(
                 &'query self,
-                query: &mut EntityPrefixedQuery<'query, $db, Entity>
+                query: &mut EntityPrefixedQuery<'query, $db, EntityId>
             )
             where
-                Entity: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query
+                EntityId: sqlx::Encode<'query, $db> + sqlx::Type<$db> + Clone + 'query
             {
                 $(
                     #[allow(unused)]

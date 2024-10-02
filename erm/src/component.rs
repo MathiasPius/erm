@@ -33,16 +33,16 @@ pub trait Component<DB: Database>: Serializable<DB> + Deserializeable<DB> + Size
 
     fn columns() -> Vec<ColumnDefinition<DB>>;
 
-    fn remove_component<'query, Entity>(query: &mut EntityPrefixedQuery<'query, DB, Entity>)
+    fn remove_component<'query, EntityId>(query: &mut EntityPrefixedQuery<'query, DB, EntityId>)
     where
-        Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+        EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
     {
         query.query(Self::DELETE, |query| query)
     }
 
-    fn create_component_table<'pool, Entity>(
+    fn create_component_table<'pool, EntityId>(
         pool: &'pool Pool<DB>,
     ) -> impl Future<Output = Result<<DB as Database>::QueryResult, sqlx::Error>> + Send
     where
-        Entity: sqlx::Type<DB>;
+        EntityId: sqlx::Type<DB>;
 }

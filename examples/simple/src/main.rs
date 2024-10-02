@@ -18,7 +18,7 @@ async fn main() {
 
     // Create our entities: Jimothy and Andrea
     //
-    // Since we're just using i64s as our "Entity", our entities
+    // Since we're just using i64s as our "EntityId", our entities
     // are actually just numbers.
     let jimothy = 1;
     backend
@@ -41,41 +41,37 @@ async fn main() {
     // List all the people we know
     let people = backend
         .list::<Person>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
         .unwrap();
 
     println!("{people:#?}");
-    // [
-    //     (
-    //         1,
-    //         Person {
-    //             name: Name(
-    //                 "Jimothy",
-    //             ),
-    //             age: Age(
-    //                 10,
-    //             ),
-    //         },
-    //     ),
-    //     (
-    //         2,
-    //         Person {
-    //             name: Name(
-    //                 "Andrea",
-    //             ),
-    //             age: Age(
-    //                 32,
-    //             ),
-    //         },
-    //     ),
+    //  [
+    //     Person {
+    //         name: Name(
+    //             "Jimothy",
+    //         ),
+    //         age: Age(
+    //             10,
+    //         ),
+    //     },
+    //     Person {
+    //         name: Name(
+    //             "Andrea",
+    //         ),
+    //         age: Age(
+    //             32,
+    //         ),
+    //     },
     // ]
 
     backend.remove::<Person>(&jimothy).await;
 
     let remaining_names = backend
         .list::<Name>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -83,7 +79,7 @@ async fn main() {
 
     // Check that only Andrea is left.
     assert_eq!(remaining_names.len(), 1);
-    println!("{:#?}", remaining_names[0].1);
+    println!("{:#?}", remaining_names);
     // Name(
     //     "Andrea",
     // )

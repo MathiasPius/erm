@@ -42,9 +42,9 @@ impl Archetype {
         });
 
         quote! {
-            fn remove<'query, Entity>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, Entity>)
+            fn remove<'query, EntityId>(query: &mut ::erm::entity::EntityPrefixedQuery<'query, #database, EntityId>)
             where
-                Entity: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
+                EntityId: #sqlx::Encode<'query, #database> + #sqlx::Type<#database> + Clone + 'query
             {
                 #(#sub_archetypes)*
             }

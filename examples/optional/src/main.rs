@@ -18,7 +18,7 @@ async fn main() {
 
     // Create our entities: Jimothy and Andrea
     //
-    // Since we're just using i64s as our "Entity", our entities
+    // Since we're just using i64s as our "EntityId", our entities
     // are actually just numbers.
     let jimothy = 1;
     backend
@@ -40,6 +40,7 @@ async fn main() {
     // List all the people we know
     let people = backend
         .list::<Person>()
+        .components()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -47,27 +48,21 @@ async fn main() {
 
     println!("{people:#?}");
     // [
-    //     (
-    //         1,
-    //         Person {
-    //             name: Name(
-    //                 "Jimothy",
-    //             ),
-    //             age: Some(Age(
+    //     Person {
+    //         name: Name(
+    //             "Jimothy",
+    //         ),
+    //         age: Some(
+    //             Age(
     //                 10,
     //             ),
-    //         },
-    //     ),
-    //     (
-    //         2,
-    //         Person {
-    //             name: Name(
-    //                 "Andrea",
-    //             ),
-    //             age: Age(
-    //                 32,
-    //             ),
-    //         },
-    //     ),
+    //         ),
+    //     },
+    //     Person {
+    //         name: Name(
+    //             "Andrea",
+    //         ),
+    //         age: None,
+    //     },
     // ]
 }

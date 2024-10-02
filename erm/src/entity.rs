@@ -1,19 +1,19 @@
 use sqlx::{query::Query, Database};
 
-pub struct EntityPrefixedQuery<'q, DB, Entity>
+pub struct EntityPrefixedQuery<'q, DB, EntityId>
 where
     DB: Database,
 {
     pub queries: Vec<Query<'q, DB, <DB as Database>::Arguments<'q>>>,
-    pub entity: Entity,
+    pub entity: EntityId,
 }
 
-impl<'query, DB, Entity> EntityPrefixedQuery<'query, DB, Entity>
+impl<'query, DB, EntityId> EntityPrefixedQuery<'query, DB, EntityId>
 where
     DB: Database,
-    Entity: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
+    EntityId: sqlx::Encode<'query, DB> + sqlx::Type<DB> + Clone + 'query,
 {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(entity: EntityId) -> Self {
         EntityPrefixedQuery {
             queries: Vec::new(),
             entity,

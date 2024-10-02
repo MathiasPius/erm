@@ -18,7 +18,7 @@ async fn main() {
 
     // Create our entities: Jimothy and Andrea
     //
-    // Since we're just using i64s as our "Entity", our entities
+    // Since we're just using i64s as our "EntityId", our entities
     // are actually just numbers.
     let jimothy = 1;
     backend
@@ -38,10 +38,11 @@ async fn main() {
         age: Age,
     }
 
-    // List all adults
+    // List all adult IDs
     let people = backend
         .list::<Person>()
         .and(Age::FIELDS.self_0.greater_than_or_equals(18))
+        .ids()
         .fetch()
         .try_collect::<Vec<_>>()
         .await
@@ -49,16 +50,7 @@ async fn main() {
 
     println!("{people:#?}");
     // [
-    //     (
-    //         2,
-    //         Person {
-    //             name: Name(
-    //                 "Andrea",
-    //             ),
-    //             age: Age(
-    //                 32,
-    //             ),
-    //         },
-    //     ),
+    //     2,
     // ]
+    assert_eq!(people, vec![andrea]);
 }
