@@ -4,20 +4,25 @@ use sqlx::{prelude::FromRow, ColumnIndex, Decode, Row, ValueRef};
 
 use crate::serialization::Deserializeable;
 
+/// Wrapper around a database-specific row which tracks the offset
+/// into the row as columns are parsed.
 pub struct OffsetRow<'r, R: Row> {
     pub row: &'r R,
     pub offset: usize,
 }
 
 impl<'r, R: Row> OffsetRow<'r, R> {
+    /// Construct a new OffsetRow from an existing row.
     pub fn new(row: &'r R) -> Self {
         OffsetRow { row, offset: 0 }
     }
 
-    pub fn skip(&mut self, offset: usize) {
-        self.offset += offset;
+    /// Skip `count` columns.
+    pub fn skip(&mut self, count: usize) {
+        self.offset += count;
     }
 
+    /// Detemines if the column indicated by `self.offset` is null.
     pub fn is_null(&self) -> bool
     where
         usize: ColumnIndex<R>,
@@ -29,6 +34,7 @@ impl<'r, R: Row> OffsetRow<'r, R> {
 }
 
 impl<'r, R: Row> OffsetRow<'r, R> {
+    /// Attempt to read the decode the current column as `T`.
     pub fn try_get<'a, T>(&'a mut self) -> Result<T, sqlx::Error>
     where
         T: Decode<'a, <R as Row>::Database> + sqlx::Type<<R as Row>::Database>,
@@ -40,27 +46,30 @@ impl<'r, R: Row> OffsetRow<'r, R> {
     }
 }
 
-/// FromRow-implementing wrapper around Components
+/// Returned row of an Entity ID and associated components from a query.
 #[derive(Debug)]
-
 pub struct Entity<EntityId, T> {
     id: EntityId,
     inner: T,
 }
 
 impl<EntityId, T> Entity<EntityId, T> {
+    /// Borrow the EntityID of the returned entity.
     pub fn id(&self) -> &EntityId {
         &self.id
     }
 
+    /// Consumes the Entity, returning its ID
     pub fn into_id(self) -> EntityId {
         self.id
     }
 
+    /// Borrow the entity's components.
     pub fn components(&self) -> &T {
         &self.inner
     }
 
+    /// Consumes the Entity, returning its components.
     pub fn into_components(self) -> T {
         self.inner
     }

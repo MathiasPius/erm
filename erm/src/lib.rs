@@ -1,4 +1,4 @@
-//! # EntityId Relational Mapping
+//! # Entity Relational Mapping
 //!
 //! Enables persistence for your Entity-Component architectures using [sqlx]
 //!
@@ -73,6 +73,8 @@
 //!
 //! # }
 //! ```
+//!
+//! See [github.com/MathiasPius/erm](https://github.com/MathiasPius/erm/tree/main/examples) for more examples.
 
 pub mod archetype;
 pub mod backend;
