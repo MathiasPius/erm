@@ -1,6 +1,6 @@
 //! # EntityId Relational Mapping
 //!
-//! Enables persistence for your EntityId-Component architectures using [sqlx]
+//! Enables persistence for your Entity-Component architectures using [sqlx]
 //!
 //! ## Quick Example
 //!

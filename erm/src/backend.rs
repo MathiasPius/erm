@@ -91,6 +91,9 @@ where
     where
         T: Archetype<DB> + Removable<DB> + Unpin + Send + 'static;
 
+    /// Query the backend for entities.
+    ///
+    /// See [`List`] for options allowng further filtering and processing.
     fn list<T>(&self) -> List<DB, EntityId, T, (), All>;
 
     fn get<T>(&self, entity: &EntityId) -> impl Future<Output = Result<T, sqlx::Error>>
@@ -98,6 +101,7 @@ where
         T: Deserializeable<DB> + Unpin + Send + 'static;
 }
 
+/// Configurable query for entities.
 pub struct List<
     DB,
     EntityId,
@@ -119,18 +123,15 @@ impl<DB, EntityId, T, F, C, Out, Map> List<DB, EntityId, T, F, C, Out, Map>
 where
     DB: Database,
 {
-    pub fn with<U: Deserializeable<DB>>(self) -> List<DB, EntityId, T, (With<U>, F), C, Out, Map> {
-        List {
-            pool: self.pool,
-            _data: PhantomData,
-            condition: self.condition,
-            map: self.map,
-        }
-    }
-
-    pub fn without<U: Deserializeable<DB>>(
+    /// Include only entities that contain the components `Include`, but do not return
+    /// return these components as part of the query.
+    ///
+    /// This is especially useful for Marker components, that don't contain
+    /// any information by themselves, but whose presence has implications
+    /// for the state of the entity.
+    pub fn with<Include: Deserializeable<DB>>(
         self,
-    ) -> List<DB, EntityId, T, (Without<U>, F), C, Out, Map> {
+    ) -> List<DB, EntityId, T, (With<Include>, F), C, Out, Map> {
         List {
             pool: self.pool,
             _data: PhantomData,
@@ -139,6 +140,26 @@ where
         }
     }
 
+    /// Exclude entities that contain the components `Exclude`.
+    ///
+    /// This is especially useful for Marker components, that don't contain
+    /// any information by themselves, but whose absence has implications
+    /// for the state of the entity.
+    pub fn without<Exclude: Deserializeable<DB>>(
+        self,
+    ) -> List<DB, EntityId, T, (Without<Exclude>, F), C, Out, Map> {
+        List {
+            pool: self.pool,
+            _data: PhantomData,
+            condition: self.condition,
+            map: self.map,
+        }
+    }
+
+    /// Apply the given condition to the query, filtering the results before
+    /// returning them from the database.
+    ///
+    /// See [`crate::condition`] for constructing conditionals.
     pub fn filter<'q, Cond: Condition<'q, DB>>(
         self,
         condition: Cond,
@@ -195,6 +216,7 @@ where
     for<'e> EntityId: sqlx::Decode<'e, DB> + sqlx::Encode<'e, DB> + sqlx::Type<DB> + Unpin + Send,
     usize: ColumnIndex<<DB as sqlx::Database>::Row>,
 {
+    /// Execute the query, returning a stream of results.
     pub fn fetch(self) -> impl Stream<Item = Result<Out, sqlx::Error>> {
         stream! {
             let mut sql = crate::cte::serialize(<F as Filter<DB>>::cte(<T as Deserializeable<DB>>::cte()).as_ref()).unwrap();
