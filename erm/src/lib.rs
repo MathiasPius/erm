@@ -9,23 +9,8 @@
 //! # async fn example1() {
 //! use erm::prelude::*;
 //!
-//! // Configure the database connection, same as you would
-//! // any other sqlx database connection pool.
-//! let options = sqlx::sqlite::SqliteConnectOptions::new()
-//!     .in_memory(true);
-//!
-//! let db = sqlx::sqlite::SqlitePoolOptions::new()
-//! #   .min_connections(1)
-//! #   .max_connections(1)
-//! #   .idle_timeout(None)
-//! #   .max_lifetime(None)
-//!    .connect_with(options)
-//!    .await
-//!    .unwrap();
-//!
-//! // Hand the pool over to our SqliteBackend, specifying
-//! // that we will be using Uuids as our EntityId type.
-//! let backend = SqliteBackend::<uuid::Uuid>::new(db);
+//! // Construct an in-memory SqliteBackend using Uuids for entity IDs.
+//! let backend = SqliteBackend::<uuid::Uuid>::in_memory().await;
 //!
 //! // Define our components
 //! #[derive(Component)]
@@ -63,9 +48,14 @@
 //! )).await;
 //!
 //! # use futures::stream::StreamExt as _;
-//! // Iterate over all components with a DisplayName
-//! let mut names = Box::pin(backend.list::<(DisplayName, Position)>().fetch());
-//! while let Some(Ok((entity, (display_name, position)))) = names.next().await {
+//! // Construct an iterator over all components with a DisplayName & Position
+//! let query = backend.list::<(DisplayName, Position)>()
+//!     .components()
+//!     .fetch();
+//!
+//! // Streams must be pinned: (https://rust-lang.github.io/async-book/04_pinning/01_chapter.html
+//! let mut names = std::pin::pin!(query);
+//! while let Some(Ok((display_name, position))) = names.next().await {
 //!     println!("name: {} at {},{}", display_name.name, position.x, position.y);
 //! }
 //! // name: Position 1 at 100,200
@@ -73,7 +63,6 @@
 //!
 //! // Remove the DisplayName component from our pos2 entity.
 //! backend.remove::<DisplayName>(&pos2).await;
-//!
 //!
 //! // Fetch the name of our first position.
 //! let pos1_name = backend.get::<DisplayName>(&pos1).await.unwrap();
