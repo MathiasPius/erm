@@ -58,13 +58,18 @@ impl Component {
     fn statements(&self, placeholder_char: char) -> TokenStream {
         let table = &self.table_name.trim_matches('"');
 
-        let column_names: Vec<_> = self.fields.iter().map(Field::column_name).collect();
+        let column_names: Vec<_> = self
+            .fields
+            .iter()
+            .map(|field| format!(", {}", field.column_name()))
+            .collect();
+
         let placeholders = placeholders(placeholder_char, column_names.len() + 1);
 
         let insert = format!(
-            "insert into {table}(entity, {column_names}) values({placeholders});",
+            "insert into {table}(entity{column_names}) values({placeholders});",
             placeholders = placeholders.join(", "),
-            column_names = column_names.join(", ")
+            column_names = column_names.join("")
         );
 
         let update = {
@@ -96,12 +101,12 @@ impl Component {
             .fields
             .iter()
             .map(Field::column_name)
-            .map(|column| format!("{column} {{}} {{}}"))
+            .map(|column| format!(",\n  {column} {{}} {{}}"))
             .collect::<Vec<_>>()
-            .join(", ");
+            .join("");
 
         let format_str =
-            format!("create table if not exists {table}(entity {{}} primary key, {columns}\n);");
+            format!("create table if not exists {table}(\n  entity {{}} primary key{columns}\n);");
 
         let definitions = self
             .fields

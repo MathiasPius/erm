@@ -119,6 +119,8 @@ impl CommonTableExpression for Merge {
 
         write!(f, "{}", "    select\n      __cte_")?;
         first.table_name(f)?;
+        write!(f, "__entity as __cte_")?;
+        self.table_name(f)?;
         write!(f, "__entity")?;
         self.columns(f)?;
         write!(f, "{}", "\n    from\n      __cte_")?;
@@ -132,7 +134,7 @@ impl CommonTableExpression for Merge {
             }
             table.table_name(f)?;
             write!(f, "\n    on\n      __cte_")?;
-            first.table_name(f)?;
+            self.table_name(f)?;
             write!(f, "__entity = __cte_")?;
             table.table_name(f)?;
             write!(f, "__entity")?;
@@ -165,6 +167,8 @@ impl CommonTableExpression for Include {
     fn serialize(&self, f: &mut dyn Write) -> Result {
         write!(f, "    select\n      __cte_")?;
         self.inner[0].table_name(f)?;
+        write!(f, "__entity as __cte_")?;
+        self.table_name(f)?;
         write!(f, "__entity")?;
         self.columns(f)?;
         write!(f, "\n    from\n      __cte_")?;
@@ -172,7 +176,7 @@ impl CommonTableExpression for Include {
         write!(f, "\n    inner join\n      __cte_")?;
         self.inner[1].table_name(f)?;
         write!(f, "\n    on\n      __cte_")?;
-        self.inner[0].table_name(f)?;
+        self.table_name(f)?;
         write!(f, "__entity = __cte_")?;
         self.inner[1].table_name(f)?;
         write!(f, "__entity")
@@ -202,6 +206,8 @@ impl CommonTableExpression for Exclude {
     fn serialize(&self, f: &mut dyn Write) -> Result {
         write!(f, "{}", "    select\n      __cte_")?;
         self.inner[0].table_name(f)?;
+        write!(f, "__entity as __cte_")?;
+        self.table_name(f)?;
         write!(f, "__entity")?;
         self.columns(f)?;
         write!(f, "\n    from\n      __cte_")?;
@@ -209,7 +215,7 @@ impl CommonTableExpression for Exclude {
         write!(f, "\n    left join\n      __cte_")?;
         self.inner[1].table_name(f)?;
         write!(f, "\n    on\n      __cte_")?;
-        self.inner[0].table_name(f)?;
+        self.table_name(f)?;
         write!(f, "__entity = __cte_")?;
         self.inner[1].table_name(f)?;
         write!(f, "__entity\n    where __cte_")?;
