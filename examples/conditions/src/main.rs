@@ -41,7 +41,7 @@ async fn main() {
     // List all adult IDs
     let people = backend
         .list::<Person>()
-        .and(Age::FIELDS.self_0.greater_than_or_equals(18))
+        .filter(Age::FIELDS.self_0.greater_than_or_equals(18))
         .ids()
         .fetch()
         .try_collect::<Vec<_>>()

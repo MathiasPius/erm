@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     archetype::Archetype,
-    condition::{All, And, Condition, Or},
+    condition::{All, Condition},
     cte::{Filter, With, Without},
     prelude::{Component, Deserializeable, Serializable},
     row::Entity,
@@ -139,30 +139,19 @@ where
         }
     }
 
-    pub fn and<'q, Cond: Condition<'q, DB>>(
+    pub fn filter<'q, Cond: Condition<'q, DB>>(
         self,
         condition: Cond,
-    ) -> List<DB, EntityId, T, F, And<C, Cond>, Out, Map> {
+    ) -> List<DB, EntityId, T, F, Cond, Out, Map> {
         List {
             pool: self.pool,
             _data: PhantomData,
-            condition: And::new(self.condition, condition),
+            condition,
             map: self.map,
         }
     }
 
-    pub fn or<'q, Cond: Condition<'q, DB>>(
-        self,
-        condition: Cond,
-    ) -> List<DB, EntityId, T, F, Or<C, Cond>, Out, Map> {
-        List {
-            pool: self.pool,
-            _data: PhantomData,
-            condition: Or::new(self.condition, condition),
-            map: self.map,
-        }
-    }
-
+    /// Map each [`Entity<EntityId, T>`] using a custom mapping function before yielding the result.
     pub fn map<M>(
         self,
         map: fn(Entity<EntityId, T>) -> M,
@@ -175,6 +164,7 @@ where
         }
     }
 
+    /// Return only the Entity IDs of the returned entities, discarding the components.
     pub fn ids(self) -> List<DB, EntityId, T, F, C, EntityId, fn(Entity<EntityId, T>) -> EntityId> {
         fn ids<EntityId, T>(entity: Entity<EntityId, T>) -> EntityId {
             entity.into_id()
@@ -183,6 +173,7 @@ where
         self.map(ids::<EntityId, T>)
     }
 
+    /// Return only the components themselves, discarding the Entity IDs associated with each entity.
     pub fn components(self) -> List<DB, EntityId, T, F, C, T, fn(Entity<EntityId, T>) -> T> {
         fn components<EntityId, T>(entity: Entity<EntityId, T>) -> T {
             entity.into_components()
