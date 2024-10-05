@@ -53,7 +53,7 @@
 //!     .components()
 //!     .fetch();
 //!
-//! // Streams must be pinned: (https://rust-lang.github.io/async-book/04_pinning/01_chapter.html
+//! // Streams must be pinned: https://rust-lang.github.io/async-book/04_pinning/01_chapter.html
 //! let mut names = std::pin::pin!(query);
 //! while let Some(Ok((display_name, position))) = names.next().await {
 //!     println!("name: {} at {},{}", display_name.name, position.x, position.y);
