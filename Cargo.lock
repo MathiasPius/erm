@@ -268,6 +268,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "enums"
+version = "0.1.0"
+dependencies = [
+ "erm",
+ "futures",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

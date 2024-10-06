@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Literal, Punct, TokenStream};
 use quote::quote;
-use syn::{parse::Parse, spanned::Spanned, Data, DeriveInput, Error, Token};
+use syn::{parse::Parse, spanned::Spanned, Data, DeriveInput, Token};
 
 use crate::field::Field;
 
@@ -286,10 +286,7 @@ impl Parse for Component {
         let derive = DeriveInput::parse(input)?;
 
         let Data::Struct(data) = derive.data else {
-            return Err(Error::new(
-                derive.span(),
-                "Component can only be derived for struct types",
-            ));
+            panic!("Component can only be derived for struct types");
         };
 
         let attributes: Vec<_> = Result::<Vec<Vec<_>>, syn::Error>::from_iter(

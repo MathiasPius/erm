@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::{parse::Parse, Data, DeriveInput, Error};
+use syn::{parse::Parse, Data, DeriveInput};
 
 use crate::field::Field;
 
@@ -106,10 +106,7 @@ impl Parse for Archetype {
         let derive = DeriveInput::parse(input)?;
 
         let Data::Struct(data) = derive.data else {
-            return Err(Error::new(
-                derive.ident.span(),
-                "Archetype can only be derived for struct types",
-            ));
+            panic!("Archetype can only be derived for struct types");
         };
 
         let type_name = derive.ident.clone();
