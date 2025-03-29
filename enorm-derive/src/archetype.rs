@@ -2,7 +2,6 @@ mod r#enum;
 mod r#struct;
 
 use proc_macro2::TokenStream;
-use quote::quote;
 use r#enum::EnumArchetype;
 use r#struct::StructArchetype;
 use syn::{parse::Parse, Data, DeriveInput};
@@ -19,26 +18,6 @@ impl Archetype {
         match self {
             Archetype::Struct(struct_archetype) => struct_archetype.implementation(sqlx, database),
             Archetype::Enum(enum_archetype) => enum_archetype.implementation(sqlx, database),
-        }
-    }
-
-    fn remove(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
-        match self {
-            Archetype::Struct(struct_archetype) => struct_archetype.remove(sqlx, database),
-            Archetype::Enum(_) => {
-                quote! { compile_error("Can't delete enum Archetypes")}
-            }
-        }
-    }
-
-    fn component_deserializer(&self, sqlx: &TokenStream, database: &TokenStream) -> TokenStream {
-        match self {
-            Archetype::Struct(struct_archetype) => {
-                struct_archetype.component_deserializer(sqlx, database)
-            }
-            Archetype::Enum(enum_archetype) => {
-                enum_archetype.component_deserializer(sqlx, database)
-            }
         }
     }
 }
