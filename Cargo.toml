@@ -6,9 +6,9 @@ members = ["enorm", "enorm-derive", "examples/*"]
 enorm = { path = "enorm" }
 enorm-derive = { path = "enorm-derive" }
 
-sqlx = { version = "0.8.2" }
-tokio = { version = "1.40.0" }
-async-trait = { version = "0.1.83" }
-futures = { version = "0.3.30" }
-uuid = { version = "1.10.0", features = ["v4"] }
-async-stream = { version = "0.3.5" }
+sqlx = { version = "0.8.6" }
+tokio = { version = "1.45.1" }
+async-trait = { version = "0.1.88" }
+futures = { version = "0.3.31" }
+uuid = { version = "1.17.0", features = ["v4"] }
+async-stream = { version = "0.3.6" }
